@@ -16,27 +16,28 @@ import ujson
 
 # 设置日志输出级别
 log.basicConfig(level=log.INFO)
-uart_log = log.getLogger("UART")
-uart = UART(UART.UART2, 115200, 8, 0, 1, 0)
+logging = log.getLogger("UART")
+uart2 = UART(UART.UART2, 115200, 8, 0, 1, 0)
+uart1 = UART(UART.UART1, 115200, 8, 0, 1, 0)
 
 
-def uart_write(msg):
-    global uart
-    uart.write(msg)
-    uart_log.info("Write msg :{}".format(msg))
-    uart_log.info("uart_write end!")
+def uart2_write(msg):
+    global uart2
+    uart2.write(msg)
+    logging.info("Write msg :{}".format(msg))
+    logging.info("uart_write end!")
 
 
-def uart_read():
-    global uart
+def uart2_read():
+    global uart2
     while True:
-        msg_len = uart.any()
+        msg_len = uart2.any()
         if (msg_len % 206 == 0) & (msg_len != 0):
             start = utime.ticks_ms()
             print(msg_len)
-            msg = uart.read(msg_len)
+            msg = uart2.read(msg_len)
             hex_msg = [hex(x) for x in msg]
-            uart_log.info("uart_read msg: {}".format(hex_msg))
+            logging.info("uart2_read msg: {}".format(hex_msg))
 
             for i in range(msg_len // 206):
                 signs_data = {}
@@ -61,10 +62,29 @@ def uart_read():
                 Handler.pub(msg)
             time_diff = utime.ticks_diff(utime.ticks_ms(), start)
             print(time_diff)
-
         else:
             utime.sleep_ms(10)
             continue
+
+
+def uart1_read():
+    global uart1
+    while True:
+        msg_len = uart1.any()
+        if msg_len:
+            print(msg_len)
+            msg = uart1.read(msg_len)
+            logging.info("uart1_read msg: {}".format(msg))
+            gprmc_info = parse_gprmc(msg)
+            print(gprmc_info)
+
+            msg = {"topic": aliyunClass.publish_topic1,
+                   "msg": msg_geoLocation.format
+                   (gprmc_info[0], gprmc_info[1], gprmc_info[2], 1)}
+            Handler.pub(msg)
+        else:
+            continue
+        utime.sleep(60)
 
 
 def hex_to_str(a, b=""):
@@ -445,6 +465,47 @@ def get_cell_location_and_sim_info():
         utime.sleep(60)
 
 
+def parse_loc_val(val, d):
+    v = float(val) / 100
+    v = int(v) + (v - int(v)) * 100 / 60
+    if d == 'S' or d == 'W':
+        v = v * -1
+    return v
+
+
+def parse_gprmc(data):
+    """
+    b'$GPRMC,111025.00,A,2517.033747,N,11019.176025,E,0.0,144.8,270920,2.3,W,A*2D\r\n'
+    b'$GPRMC,,V,,,,,,,,,,N*53\r\n'
+    b'$GPRMC,024443.0,A,2517.038296,N,11019.174048,E,0.0,,120201,0.0,E,A*2F\r\n'
+    $GPRMC,<1>,<2>,<3>,<4>,<5>,<6>,<7>,<8>,<9>,<10>,<11>,<12>*hh<CR><LF>
+    <1> UTC时间，hhmmss（时分秒）格式
+    <2> 定位状态，A=有效定位，V=无效定位
+    <3> 纬度ddmm.mmmm（度分）格式（前面的0也将被传输）
+    <4> 纬度半球N（北半球）或S（南半球）
+    <5> 经度dddmm.mmmm（度分）格式（前面的0也将被传输）
+    <6> 经度半球E（东经）或W（西经）
+    <7> 地面速率（000.0~999.9节，前面的0也将被传输） 1节=1.852千米（km/h)
+    <8> 地面航向（000.0~359.9度，以真北为参考基准，前面的0也将被传输）
+    <9> UTC日期，ddmmyy（日月年）格式
+    <10> 磁偏角（000.0~180.0度，前面的0也将被传输）
+    <11> 磁偏角方向，E（东）或W（西）
+    <12> 模式指示（仅NMEA0183 3.00版本输出，A=自主定位，D=差分，E=估算，N=数据无效）
+    """
+    li = data.decode().replace('$GPRMC,', '').strip().split(',')
+    lat = log = speed = direct = 0
+    if li[1] == 'A':
+        lat = round(parse_loc_val(li[2], li[3]), 6)  # 纬度
+        log = round(parse_loc_val(li[4], li[5]), 6)  # 经度
+        speed = float(li[6]) * 1.852
+        if len(li[7]) > 0:
+            direct = float(li[7])
+        else:
+            direct = 0
+        # logging.info('lat:{:.6f},log:{:.6f},speed:{},direct:{}'.format(lat, log, speed, direct))
+    return log, lat, speed, direct
+
+
 def calc_rssi_dbm(rssi_dec):
     """Calc the RSSI value to RSSI dBm"""
     rssi_offset = 74
@@ -529,6 +590,28 @@ if __name__ == '__main__':
                             "method": "thing.event.property.post"
                          }}"""
 
+    msg_geoLocation = """{{
+                            "id": "5676",
+                            "version": "1.0",
+                            "params": {{
+                                "GeoLocation": {{
+                                    "Longitude": {{
+                                        "value": {0}
+                                    }},
+                                    "Latitude": {{
+                                        "value": {1}
+                                    }},
+                                    "Altitude": {{
+                                        "value": {2}
+                                    }},
+                                    "CoordinateSystem": {{
+                                        "value": {3}
+                                    }}
+                                }}
+                            }},
+                            "method": "thing.event.property.post"
+                         }}"""
+
     msg_signs_data = """{{
                             "id": "789",
                             "version": "1.0",
@@ -572,11 +655,12 @@ if __name__ == '__main__':
     _thread.start_new_thread(get_cell_location_and_sim_info, ())
     _thread.start_new_thread(ath10_dev.trigger_measurement, ())
     _thread.start_new_thread(sgm58031_dev.measure_adc_value, ())
-    # _thread.start_new_thread(uart_read, ())
+    _thread.start_new_thread(uart2_read, ())
+    _thread.start_new_thread(uart1_read, ())
 
     aliyunClass.ali_start()
 
     while True:
         utime.sleep(4)
         message = "temperature = {}, humidity = {}".format(ath10_dev.temperature, ath10_dev.humidity)
-        uart_write(message)
+        uart2_write(message)
