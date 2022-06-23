@@ -105,7 +105,7 @@ class ALiYunClass(object):
         self.ProductKey = "a1GugRmVZzw"  # 产品标识
         self.ProductSecret = 'MqLQtdNniH3hKf1r'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BX-XC-200-001"  # 设备名称
+        self.DeviceName = "BX-XC-200-002"  # 设备名称
 
         self.subscribe_topic1 = "/sys" + "/" + self.ProductKey + "/" + \
                                 self.DeviceName + "/" + "thing/service/property/set"
@@ -652,15 +652,17 @@ if __name__ == '__main__':
                             "method": "thing.event.property.post"
                          }}"""
 
+    aliyunClass.ali_start()
+
     _thread.start_new_thread(get_cell_location_and_sim_info, ())
     _thread.start_new_thread(ath10_dev.trigger_measurement, ())
     _thread.start_new_thread(sgm58031_dev.measure_adc_value, ())
     _thread.start_new_thread(uart2_read, ())
     _thread.start_new_thread(uart1_read, ())
 
-    aliyunClass.ali_start()
-
+    print("#--------#")
     while True:
+        print("#*********#")
         utime.sleep(4)
         message = "temperature = {}, humidity = {}".format(ath10_dev.temperature, ath10_dev.humidity)
         uart2_write(message)
