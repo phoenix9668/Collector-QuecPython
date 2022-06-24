@@ -58,6 +58,21 @@ def uart2_read():
                 Handler.pub(msg)
             time_diff = utime.ticks_diff(utime.ticks_ms(), start)
             app_log.info("time_diff = {}".format(time_diff))
+        elif msg_len:
+            app_log.info(msg_len)
+            message = uart2.read(msg_len).decode()
+            app_log.info("uart2_read msg: {}".format(message))
+            msg_id += 1
+            msg = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_product_info_StatusInfo.format(msg_id, message)}
+            Handler.pub(msg)
+            if "##Read Memory Complete##" in message:
+                collector_id = message[18:26]
+                app_log.info(collector_id)
+                msg_id += 1
+                msg = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
+                Handler.pub(msg)
         else:
             utime.sleep_ms(10)
             continue
@@ -83,6 +98,13 @@ def uart1_read():
 def hex_to_str(a, b=""):
     string = ''.join([hex_byte.replace('0x', b) for hex_byte in a])
     return string
+
+
+def str_to_hex(s):
+    list_hex = ' '.join([hex(ord(c)) for c in s]).split()
+    list_temp = [int(i, 16) for i in list_hex]
+    byte_array = bytearray(list_temp)
+    return byte_array
 
 
 class SysTopicClass(object):
@@ -147,6 +169,7 @@ class ALiYunClass(object):
 class Handler(object):
     @classmethod
     def sub(cls, topic, msg):
+        global msg_id
         print(
             "Subscribe Recv: Topic={},Msg={}".format(
                 msg.get("topic").decode(),
@@ -155,9 +178,15 @@ class Handler(object):
         app_log.info(msg_dict)
         if 'params' in msg_dict.keys():
             params_dict = msg_dict['params']
-            if 'product_information:CollectorID' in params_dict.keys():
-                app_log.info(params_dict['product_information:CollectorID'])
-                uart2_write(params_dict['product_information:CollectorID'])
+            if 'product_information:SendCommand' in params_dict.keys():
+                app_log.info(params_dict['product_information:SendCommand'])
+                msg_id += 1
+                msg = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_product_info_SendCommand.format
+                       (msg_id, params_dict['product_information:SendCommand'])}
+                Handler.pub(msg)
+                hex_array = str_to_hex(params_dict['product_information:SendCommand'])
+                uart2_write(hex_array)
 
     @classmethod
     def pub(cls, msg):
@@ -461,13 +490,13 @@ def get_cell_location():
         utime.sleep(86400)
 
 
-def get_product_info():
+def get_sim():
     global msg_id
     sim_imsi = net_ser.sim.getImsi()
     sim_iccid = net_ser.sim.getIccid()
     msg_id += 1
     msg = {"topic": aliyunClass.property_publish_topic,
-           "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid, signs_data['collector_id'])}
+           "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid)}
     Handler.pub(msg)
 
 
@@ -623,13 +652,43 @@ if __name__ == '__main__':
                     }},
                     "product_information:ICCID": {{
                         "value": "{2}"
-                    }},
-                    "product_information:CollectorID": {{
-                        "value": "{3}"
                     }}
                 }},
                 "method": "thing.event.property.post"
              }}"""
+
+    msg_product_info_SendCommand = """{{
+                                    "id": "{0}",
+                                    "version": "1.0",
+                                    "params": {{
+                                        "product_information:SendCommand": {{
+                                            "value": "{1}"
+                                        }}
+                                    }},
+                                    "method": "thing.event.property.post"
+                                 }}"""
+
+    msg_product_info_CollectorID = """{{
+                                    "id": "{0}",
+                                    "version": "1.0",
+                                    "params": {{
+                                        "product_information:CollectorID": {{
+                                            "value": "{1}"
+                                        }}
+                                    }},
+                                    "method": "thing.event.property.post"
+                                 }}"""
+
+    msg_product_info_StatusInfo = """{{
+                                    "id": "{0}",
+                                    "version": "1.0",
+                                    "params": {{
+                                        "product_information:StatusInfo": {{
+                                            "value": "{1}"
+                                        }}
+                                    }},
+                                    "method": "thing.event.property.post"
+                                 }}"""
 
     msg_geoLocation = """{{
                             "id": "{0}",
@@ -703,6 +762,4 @@ if __name__ == '__main__':
         uart1_read()
         ath10_dev.trigger_measurement()
         sgm58031_dev.measure_adc_value()
-        get_product_info()
-
-
+        get_sim()
