@@ -2,6 +2,7 @@
 # uos.chdir('/usr/')
 from machine import UART
 from machine import I2C
+from misc import PWM
 from aLiYun import aLiYun
 import cellLocator
 import sys_bus
@@ -9,6 +10,8 @@ import _thread
 import utime
 from usr.bin.guard import GuardContext
 import ujson
+from machine import Pin, ExtInt
+from usr.bin.third_party.ql_interrupter import WatchDog
 
 # from usr.i2c_aht10 import Aht10Class
 uart2 = UART(UART.UART2, 115200, 8, 0, 1, 0)
@@ -39,8 +42,14 @@ def uart2_read():
                 signs_data['collector_id'] = hex_to_str(hex_msg[temp:temp + 4], " ")
                 signs_data['rfid'] = hex_to_str(hex_msg[temp + 5:temp + 11], " ")
                 signs_data['guid'] = hex_to_str(hex_msg[temp + 11:temp + 43], " ")
-                signs_data['step_array'] = hex_to_str(hex_msg[temp + 43:temp + 115], " ")
-                signs_data['ingestion_array'] = hex_to_str(hex_msg[temp + 115:temp + 187], " ")
+
+                signs_data['reset_array'] = hex_to_str(hex_msg[temp + 43:temp + 67], " ")
+                signs_data['ingestion_array'] = hex_to_str(hex_msg[temp + 67:temp + 91], " ")
+                signs_data['movement_array'] = hex_to_str(hex_msg[temp + 91:temp + 115], " ")
+                signs_data['climb_array'] = hex_to_str(hex_msg[temp + 115:temp + 139], " ")
+                signs_data['ruminate_array'] = hex_to_str(hex_msg[temp + 139:temp + 163], " ")
+                signs_data['other_array'] = hex_to_str(hex_msg[temp + 163:temp + 187], " ")
+
                 signs_data['stage'] = int(hex_msg[temp + 187])
                 signs_data['battery_voltage'] = (int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189])
                 signs_data['reset_cnt'] = (int(hex_msg[temp + 190]) << 8) | int(hex_msg[temp + 191])
@@ -49,30 +58,31 @@ def uart2_read():
                 app_log.info(signs_data)
 
                 msg_id += 1
-                msg = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_signs_data.format
-                       (msg_id, signs_data['collector_id'], signs_data['rfid'],
-                        signs_data['guid'], signs_data['step_array'],
-                        signs_data['ingestion_array'], signs_data['stage'], signs_data['battery_voltage'],
-                        signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
-                Handler.pub(msg)
+                message = {"topic": aliyunClass.property_publish_topic,
+                           "msg": msg_signs_data.format
+                           (msg_id, signs_data['collector_id'], signs_data['rfid'],
+                            signs_data['guid'], signs_data['reset_array'], signs_data['ingestion_array'],
+                            signs_data['movement_array'], signs_data['climb_array'], signs_data['ruminate_array'],
+                            signs_data['other_array'], signs_data['stage'], signs_data['battery_voltage'],
+                            signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
+                Handler.pub(message)
             time_diff = utime.ticks_diff(utime.ticks_ms(), start)
             app_log.info("time_diff = {}".format(time_diff))
         elif msg_len:
             app_log.info(msg_len)
-            message = uart2.read(msg_len).decode()
-            app_log.info("uart2_read msg: {}".format(message))
+            msg = uart2.read(msg_len).decode()
+            app_log.info("uart2_read msg: {}".format(msg))
             msg_id += 1
-            msg = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_product_info_StatusInfo.format(msg_id, message)}
-            Handler.pub(msg)
-            if "##Read Memory Complete##" in message:
-                collector_id = message[18:26]
+            message = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_product_info_StatusInfo.format(msg_id, msg)}
+            Handler.pub(message)
+            if "##Read Memory Complete##" in msg:
+                collector_id = msg[18:26]
                 app_log.info(collector_id)
                 msg_id += 1
-                msg = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
-                Handler.pub(msg)
+                message = {"topic": aliyunClass.property_publish_topic,
+                           "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
+                Handler.pub(message)
         else:
             utime.sleep_ms(10)
             continue
@@ -85,14 +95,15 @@ def uart1_read():
         app_log.info("msg_len = {}".format(msg_len))
         msg = uart1.read(msg_len)
         app_log.info("uart1_read msg: {}".format(msg))
-        gprmc_info = parse_gprmc(msg)
-        app_log.info("gprmc_info = {}".format(gprmc_info))
+        if "$GPRMC" in msg:
+            gprmc_info = parse_gprmc(msg)
+            app_log.info("gprmc_info = {}".format(gprmc_info))
 
-        msg_id += 1
-        msg = {"topic": aliyunClass.property_publish_topic,
-               "msg": msg_geoLocation.format
-               (msg_id, gprmc_info[0], gprmc_info[1], gprmc_info[2], 1)}
-        Handler.pub(msg)
+            msg_id += 1
+            message = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_geoLocation.format
+                       (msg_id, gprmc_info[0], gprmc_info[1], gprmc_info[2], 1)}
+            Handler.pub(message)
 
 
 def hex_to_str(a, b=""):
@@ -117,10 +128,10 @@ class SysTopicClass(object):
 class ALiYunClass(object):
     def __init__(self):
         ALiYunClass.inst = self
-        self.ProductKey = "a1GugRmVZzw"  # 产品标识
-        self.ProductSecret = 'MqLQtdNniH3hKf1r'  # 产品密钥（一机一密认证此参数传入None）
+        self.ProductKey = "he2maYabo9j"  # 产品标识
+        self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BX-XC-200-003"  # 设备名称
+        self.DeviceName = "BW-XC-200-007"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -181,10 +192,10 @@ class Handler(object):
             if 'product_information:SendCommand' in params_dict.keys():
                 app_log.info(params_dict['product_information:SendCommand'])
                 msg_id += 1
-                msg = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_product_info_SendCommand.format
-                       (msg_id, params_dict['product_information:SendCommand'])}
-                Handler.pub(msg)
+                message = {"topic": aliyunClass.property_publish_topic,
+                           "msg": msg_product_info_SendCommand.format
+                           (msg_id, params_dict['product_information:SendCommand'])}
+                Handler.pub(message)
                 hex_array = str_to_hex(params_dict['product_information:SendCommand'])
                 uart2_write(hex_array)
 
@@ -262,9 +273,9 @@ class AHT10Class:
         # print("current temperature is {0}°C".format(self.temperature))
         app_log.info("current temperature = {}°C, current humidity = {}%".format(self.temperature, self.humidity))
         msg_id += 1
-        msg = {"topic": aliyunClass.property_publish_topic,
-               "msg": msg_temperature_humidity.format(msg_id, self.temperature, self.humidity)}
-        Handler.pub(msg)
+        message = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_temperature_humidity.format(msg_id, self.temperature, self.humidity)}
+        Handler.pub(message)
 
     def trigger_measurement(self):
         # Trigger data conversion
@@ -459,9 +470,9 @@ class SGM58031Class:
                 app_log.info("voltage = {}".format(self.voltage))
 
             msg_id += 1
-            msg = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_voltage.format(msg_id, self.battery_voltage, self.voltage)}
-            Handler.pub(msg)
+            message = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_voltage.format(msg_id, self.battery_voltage, self.voltage)}
+            Handler.pub(message)
 
         # -2- Initialise the SGM58031 peripheral
         if self.flip_sign:
@@ -481,13 +492,14 @@ class SGM58031Class:
 def get_cell_location():
     global msg_id
     while True:
+        utime.sleep(86400)
+        # 1111111122222222  qa6qTK91597826z6
         cell_location = cellLocator.getLocation("www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1)
         msg_id += 1
-        msg = {"topic": aliyunClass.property_publish_topic,
-               "msg": msg_cellLocator.format
-               (msg_id, cell_location[0], cell_location[1], cell_location[2])}
-        Handler.pub(msg)
-        utime.sleep(86400)
+        message = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_cellLocator.format
+                   (msg_id, cell_location[0], cell_location[1], cell_location[2])}
+        Handler.pub(message)
 
 
 def get_sim():
@@ -495,9 +507,9 @@ def get_sim():
     sim_imsi = net_ser.sim.getImsi()
     sim_iccid = net_ser.sim.getIccid()
     msg_id += 1
-    msg = {"topic": aliyunClass.property_publish_topic,
-           "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid)}
-    Handler.pub(msg)
+    message = {"topic": aliyunClass.property_publish_topic,
+               "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid)}
+    Handler.pub(message)
 
 
 def parse_loc_val(val, d):
@@ -551,6 +563,27 @@ def calc_rssi_dbm(rssi_dec):
     return float('%.2f' % rssi_dbm)
 
 
+def light_breath():
+    cycle = 100  # 周期时间
+    high = 1  # 高电平时间
+    flag = 1  # 切换标志位
+    while True:
+        if flag == 1:
+            pwm = PWM(PWM.PWM0, PWM.ABOVE_1US, high, cycle)
+            pwm.open()  # 开启PWM
+            high += 1  # 高电平时间加1
+            utime.sleep_ms(10)  # 延时10ms
+            if high == cycle:
+                flag = 0
+        elif flag == 0:
+            pwm = PWM(PWM.PWM0, PWM.ABOVE_1US, high, cycle)
+            pwm.open()  # 开启PWM
+            high -= 1  # 高电平时间减1
+            utime.sleep_ms(10)
+            if high == 1:
+                flag = 1
+
+
 def log_callback(*args, **kwargs):
     app_log.debug("log_callback,args:{},kwargs:{}".format(args, kwargs))
 
@@ -560,8 +593,25 @@ def net_callback(*args, **kwargs):
     app_log.debug("net_callback,args:{},kwargs:{}".format(args, kwargs))
 
 
+def pin_interrupt_callback(topic, message):
+    # topic = GPIO17_EXINT, message={'gpio': 18, 'pressure': 0}
+    # gpio是对应的gpio号, pressure是电压值
+    app_log.info("pin_interrupt_callback, topic: {}, message: {}".format(topic, message))
+
+
+def wdt_kick_callback(topic, msg):
+    app_log.info("wdt_kick_callback topic = {} msg = {}".format(topic, msg))
+
+
+def wdt_feed_callback(topic, msg):
+    app_log.info("wdt_feed_callback topic = {} msg = {}".format(topic, msg))
+
+
+PROJECT_NAME = 'QUECPYTHON_600NV2.0'  # 必须要有这行代码才能合并
+PROJECT_VERSION = '1.0.0'  # 必须要有这行代码才能合并
+
 if __name__ == '__main__':
-    utime.sleep(20)
+    utime.sleep(5)
     # 刷新容器
     guard_context = GuardContext()
     guard_context.refresh()
@@ -569,18 +619,18 @@ if __name__ == '__main__':
     net_ser = guard_context.get_server("net")
     log_ser = guard_context.get_server("log")
     log_ser.set_level("INFO")
-    pm_ser = guard_context.get_server("pm")
-    pm_ser.lock()
-    pm_ser.count()
-    # 设置是否自动休眠, 默认是自动休眠, 1是自动休眠0则不是
-    pm_ser.auto_sleep(1)
+    # pm_ser = guard_context.get_server("pm")
+    # pm_ser.lock()
+    # pm_ser.count()
+    # # 设置是否自动休眠, 默认是自动休眠, 1是自动休眠0则不是
+    # pm_ser.auto_sleep(1)
     # 订阅服务
     net_ser.subscribe(net_callback)
     log_ser.subscribe(log_callback)
     # 获取app_log
     app_log = guard_context.get_logger("app_log")
     app_log.info("net status: {}".format(net_ser.get_net_status()))
-    net_ser.wait_connect(5)
+    net_status = net_ser.wait_connect(5)
 
     aliyunClass = ALiYunClass()
     aliyunClass.ali_subscribe()
@@ -590,6 +640,14 @@ if __name__ == '__main__':
     sys_bus.subscribe(sys_topic.OTA, Handler.ota)
     sys_bus.subscribe(sys_topic.SUB, Handler.sub)
     sys_bus.subscribe(sys_topic.PUB, aliyunClass.ali_publish)
+    # 订阅gpio的中断
+    sys_bus.subscribe("GPIO17_EXINT", pin_interrupt_callback)
+    # 订阅喂狗后，硬件狗拉GPIO 告知模块喂狗成功
+    sys_bus.subscribe("WDT_KICK_TOPIC", wdt_kick_callback)
+    # 订阅喂狗后的回调
+    sys_bus.subscribe("WDT_KICK_TOPIC_FEED", wdt_feed_callback)
+    watch_dog = WatchDog(Pin.GPIO17, 1, 10000)
+    watch_dog.start()
 
     ath10_dev = AHT10Class()
     sgm58031_dev = SGM58031Class()
@@ -617,7 +675,7 @@ if __name__ == '__main__':
                         "BatteryVoltage": {{
                             "value": {1}
                         }},
-                        "Voltage": {{
+                        "PowerVoltage": {{
                             "value": {2}
                         }}
                     }},
@@ -690,6 +748,22 @@ if __name__ == '__main__':
                                     "method": "thing.event.property.post"
                                  }}"""
 
+    msg_product_info_NetStatus = """{{
+                                    "id": "{0}",
+                                    "version": "1.0",
+                                    "params": {{
+                                        "product_information:NetStatus": {{
+                                            "product_information:StageCode": {{
+                                                "value": "{1}"
+                                            }},
+                                            "product_information:SubCode": {{
+                                                "value": "{2}"
+                                            }}
+                                        }}
+                                    }},
+                                    "method": "thing.event.property.post"
+                                 }}"""
+
     msg_geoLocation = """{{
                             "id": "{0}",
                             "version": "1.0",
@@ -726,26 +800,38 @@ if __name__ == '__main__':
                                     "collar_information:GUID": {{
                                         "value": "{3}"
                                     }},
-                                    "collar_information:StepArray": {{
+                                    "collar_information:resetArray": {{
                                         "value": "{4}"
                                     }},
-                                    "collar_information:IngestionArray": {{
+                                    "collar_information:ingestionArray": {{
                                         "value": "{5}"
                                     }},
+                                    "collar_information:movementArray": {{
+                                        "value": "{6}"
+                                    }},
+                                    "collar_information:climbArray": {{
+                                        "value": "{7}"
+                                    }},
+                                    "collar_information:ruminateArray": {{
+                                        "value": "{8}"
+                                    }},
+                                    "collar_information:otherArray": {{
+                                        "value": "{9}"
+                                    }},
                                     "collar_information:Stage": {{
-                                        "value": {6}
+                                        "value": {10}
                                     }},
                                     "collar_information:BatteryVoltage": {{
-                                        "value": {7}
+                                        "value": {11}
                                     }},
                                     "collar_information:ResetCnt": {{
-                                        "value": {8}
+                                        "value": {12}
                                     }},
                                     "collar_information:SignalStrength": {{
-                                        "value": {9}
+                                        "value": {12}
                                     }},
                                     "collar_information:UTCtime": {{
-                                        "value": "{10}"
+                                        "value": "{14}"
                                     }}
                                 }}
                             }},
@@ -753,9 +839,14 @@ if __name__ == '__main__':
                          }}"""
 
     aliyunClass.ali_start()
+    msg_id += 1
+    message = {"topic": aliyunClass.property_publish_topic,
+               "msg": msg_product_info_NetStatus.format(msg_id, net_status[0], net_status[1])}
+    Handler.pub(message)
 
     _thread.start_new_thread(get_cell_location, ())
     _thread.start_new_thread(uart2_read, ())
+    # _thread.start_new_thread(light_breath, ())
 
     while True:
         utime.sleep(120)
