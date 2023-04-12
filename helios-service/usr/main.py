@@ -828,7 +828,7 @@ if __name__ == '__main__':
                                         "value": {12}
                                     }},
                                     "collar_information:SignalStrength": {{
-                                        "value": {12}
+                                        "value": {13}
                                     }},
                                     "collar_information:UTCtime": {{
                                         "value": "{14}"
