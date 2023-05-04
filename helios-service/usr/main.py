@@ -51,7 +51,7 @@ def uart2_read():
                 signs_data['other_array'] = hex_to_str(hex_msg[temp + 163:temp + 187], " ")
 
                 signs_data['stage'] = int(hex_msg[temp + 187])
-                signs_data['battery_voltage'] = (int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189])
+                signs_data['battery_voltage'] = battery_pct((int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189]))
                 signs_data['reset_cnt'] = (int(hex_msg[temp + 190]) << 8) | int(hex_msg[temp + 191])
                 signs_data['signal_strength'] = calc_rssi_dbm(int(hex_msg[temp + 192]))
                 signs_data['utc_time'] = int(round(utime.mktime(utime.localtime()) * 1000))
@@ -561,6 +561,11 @@ def calc_rssi_dbm(rssi_dec):
     else:
         rssi_dbm = (rssi_dec / 2) - rssi_offset
     return float('%.2f' % rssi_dbm)
+
+
+def battery_pct(battery_level):
+    """Calc the battery level to battery pct"""
+    return float('%.2f' % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
 
 
 def light_breath():
