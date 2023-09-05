@@ -131,7 +131,7 @@ class ALiYunClass(object):
         self.ProductKey = "he2maYabo9j"  # 产品标识
         self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-007"  # 设备名称
+        self.DeviceName = "BW-XC-200-001"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -565,7 +565,12 @@ def calc_rssi_dbm(rssi_dec):
 
 def battery_pct(battery_level):
     """Calc the battery level to battery pct"""
-    return float('%.2f' % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
+    result_pct = float('%.2f' % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
+    if result_pct >= 1.0:
+        result_pct = 1.0
+    elif result_pct < 0.0:
+        result_pct = 0.0
+    return result_pct
 
 
 def light_breath():
@@ -854,7 +859,7 @@ if __name__ == '__main__':
     # _thread.start_new_thread(light_breath, ())
 
     while True:
-        utime.sleep(120)
+        utime.sleep(1200)
         uart1_read()
         ath10_dev.trigger_measurement()
         sgm58031_dev.measure_adc_value()
