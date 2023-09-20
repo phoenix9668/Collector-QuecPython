@@ -43,7 +43,7 @@ def uart2_read():
                 signs_data['rfid'] = hex_to_str(hex_msg[temp + 5:temp + 11], " ")
                 signs_data['guid'] = hex_to_str(hex_msg[temp + 11:temp + 43], " ")
 
-                signs_data['reset_array'] = hex_to_str(hex_msg[temp + 43:temp + 67], " ")
+                signs_data['rest_array'] = hex_to_str(hex_msg[temp + 43:temp + 67], " ")
                 signs_data['ingestion_array'] = hex_to_str(hex_msg[temp + 67:temp + 91], " ")
                 signs_data['movement_array'] = hex_to_str(hex_msg[temp + 91:temp + 115], " ")
                 signs_data['climb_array'] = hex_to_str(hex_msg[temp + 115:temp + 139], " ")
@@ -61,7 +61,7 @@ def uart2_read():
                 message = {"topic": aliyunClass.property_publish_topic,
                            "msg": msg_signs_data.format
                            (msg_id, signs_data['collector_id'], signs_data['rfid'],
-                            signs_data['guid'], signs_data['reset_array'], signs_data['ingestion_array'],
+                            signs_data['guid'], signs_data['rest_array'], signs_data['ingestion_array'],
                             signs_data['movement_array'], signs_data['climb_array'], signs_data['ruminate_array'],
                             signs_data['other_array'], signs_data['stage'], signs_data['battery_voltage'],
                             signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
@@ -131,7 +131,7 @@ class ALiYunClass(object):
         self.ProductKey = "he2maYabo9j"  # 产品标识
         self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-001"  # 设备名称
+        self.DeviceName = "BW-XC-200-005"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -810,7 +810,7 @@ if __name__ == '__main__':
                                     "collar_information:GUID": {{
                                         "value": "{3}"
                                     }},
-                                    "collar_information:resetArray": {{
+                                    "collar_information:restArray": {{
                                         "value": "{4}"
                                     }},
                                     "collar_information:ingestionArray": {{
@@ -859,8 +859,8 @@ if __name__ == '__main__':
     # _thread.start_new_thread(light_breath, ())
 
     while True:
-        utime.sleep(1200)
         uart1_read()
         ath10_dev.trigger_measurement()
         sgm58031_dev.measure_adc_value()
         get_sim()
+        utime.sleep(1200)
