@@ -3,6 +3,7 @@
 from machine import UART
 from machine import I2C
 from misc import PWM
+from misc import Power
 from aLiYun import aLiYun
 import cellLocator
 import sys_bus
@@ -39,22 +40,35 @@ def uart2_read():
 
             for i in range(msg_len // 206):
                 temp = 206 * i
-                signs_data['collector_id'] = hex_to_str(hex_msg[temp:temp + 4], " ")
-                signs_data['rfid'] = hex_to_str(hex_msg[temp + 5:temp + 11], " ")
-                signs_data['guid'] = hex_to_str(hex_msg[temp + 11:temp + 43], " ")
+                signs_data['collector_id'] = hex_to_str(
+                    hex_msg[temp:temp + 4], " ")
+                signs_data['rfid'] = hex_to_str(
+                    hex_msg[temp + 5:temp + 11], " ")
+                signs_data['guid'] = hex_to_str(
+                    hex_msg[temp + 11:temp + 43], " ")
 
-                signs_data['rest_array'] = hex_to_str(hex_msg[temp + 43:temp + 67], " ")
-                signs_data['ingestion_array'] = hex_to_str(hex_msg[temp + 67:temp + 91], " ")
-                signs_data['movement_array'] = hex_to_str(hex_msg[temp + 91:temp + 115], " ")
-                signs_data['climb_array'] = hex_to_str(hex_msg[temp + 115:temp + 139], " ")
-                signs_data['ruminate_array'] = hex_to_str(hex_msg[temp + 139:temp + 163], " ")
-                signs_data['other_array'] = hex_to_str(hex_msg[temp + 163:temp + 187], " ")
+                signs_data['rest_array'] = hex_to_str(
+                    hex_msg[temp + 43:temp + 67], " ")
+                signs_data['ingestion_array'] = hex_to_str(
+                    hex_msg[temp + 67:temp + 91], " ")
+                signs_data['movement_array'] = hex_to_str(
+                    hex_msg[temp + 91:temp + 115], " ")
+                signs_data['climb_array'] = hex_to_str(
+                    hex_msg[temp + 115:temp + 139], " ")
+                signs_data['ruminate_array'] = hex_to_str(
+                    hex_msg[temp + 139:temp + 163], " ")
+                signs_data['other_array'] = hex_to_str(
+                    hex_msg[temp + 163:temp + 187], " ")
 
                 signs_data['stage'] = int(hex_msg[temp + 187])
-                signs_data['battery_voltage'] = battery_pct((int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189]))
-                signs_data['reset_cnt'] = (int(hex_msg[temp + 190]) << 8) | int(hex_msg[temp + 191])
-                signs_data['signal_strength'] = calc_rssi_dbm(int(hex_msg[temp + 192]))
-                signs_data['utc_time'] = int(round(utime.mktime(utime.localtime()) * 1000))
+                signs_data['battery_voltage'] = battery_pct(
+                    (int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189]))
+                signs_data['reset_cnt'] = (
+                    int(hex_msg[temp + 190]) << 8) | int(hex_msg[temp + 191])
+                signs_data['signal_strength'] = calc_rssi_dbm(
+                    int(hex_msg[temp + 192]))
+                signs_data['utc_time'] = int(
+                    round(utime.mktime(utime.localtime()) * 1000))
                 app_log.info(signs_data)
 
                 msg_id += 1
@@ -128,10 +142,12 @@ class SysTopicClass(object):
 class ALiYunClass(object):
     def __init__(self):
         ALiYunClass.inst = self
+        # self.ProductKey = "he2maYabo9j"  # 产品标识
+        # self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.ProductKey = "he2maYabo9j"  # 产品标识
         self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-005"  # 设备名称
+        self.DeviceName = "BW-XC-200-025"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -146,7 +162,8 @@ class ALiYunClass(object):
             self.DeviceSecret)
         # 设置mqtt连接属性
         client_id = self.ProductKey + "." + self.DeviceName  # 自定义字符（不超过64）
-        self.ali.setMqtt(client_id, clean_session=False, keepAlive=60, reconn=True)  # False True
+        self.ali.setMqtt(client_id, clean_session=False,
+                         keepAlive=60, reconn=True)  # False True
 
         # 设置回调函数
         self.ali.setCallback(self.ali_sub_cb)
@@ -196,8 +213,12 @@ class Handler(object):
                            "msg": msg_product_info_SendCommand.format
                            (msg_id, params_dict['product_information:SendCommand'])}
                 Handler.pub(message)
-                hex_array = str_to_hex(params_dict['product_information:SendCommand'])
-                uart2_write(hex_array)
+                if params_dict['product_information:SendCommand'] == 'reset':
+                    Power.powerRestart()
+                else:
+                    hex_array = str_to_hex(
+                        params_dict['product_information:SendCommand'])
+                    uart2_write(hex_array)
 
     @classmethod
     def pub(cls, msg):
@@ -265,13 +286,17 @@ class AHT10Class:
         global msg_id
         r_data = data
         # Convert the temperature as described in the data book
-        self.humidity = (r_data[0] << 12) | (r_data[1] << 4) | ((r_data[2] & 0xF0) >> 4)
+        self.humidity = (r_data[0] << 12) | (
+            r_data[1] << 4) | ((r_data[2] & 0xF0) >> 4)
         self.humidity = float('%.2f' % ((self.humidity / (1 << 20)) * 100.0))
         # print("current humidity is {0}%".format(self.humidity))
-        self.temperature = ((r_data[2] & 0xf) << 16) | (r_data[3] << 8) | r_data[4]
-        self.temperature = float('%.2f' % ((self.temperature * 200.0 / (1 << 20)) - 50))
+        self.temperature = ((r_data[2] & 0xf) << 16) | (
+            r_data[3] << 8) | r_data[4]
+        self.temperature = float(
+            '%.2f' % ((self.temperature * 200.0 / (1 << 20)) - 50))
         # print("current temperature is {0}°C".format(self.temperature))
-        app_log.info("current temperature = {}°C, current humidity = {}%".format(self.temperature, self.humidity))
+        app_log.info("current temperature = {}°C, current humidity = {}%".format(
+            self.temperature, self.humidity))
         msg_id += 1
         message = {"topic": aliyunClass.property_publish_topic,
                    "msg": msg_temperature_humidity.format(msg_id, self.temperature, self.humidity)}
@@ -380,7 +405,8 @@ class SGM58031Class:
                                                (self.comp_que_sel['Disable_Comparator'])
         self.register_map['Low_Thresh_Register'] = low_thresh_register
         self.register_map['High_Thresh_Register'] = high_thresh_register
-        self.register_map['Config1_Register'] = (self.dr_sel_sel['DR_SEL0'] << 7 & 0x0080)
+        self.register_map['Config1_Register'] = (
+            self.dr_sel_sel['DR_SEL0'] << 7 & 0x0080)
         pass
 
     def self_verifying(self):
@@ -461,12 +487,17 @@ class SGM58031Class:
         tmp = self.read_register([self.register_addr['CONF_REG']], 2)
         if tmp[0] >> 7 == 1:
             if self.flip_sign:
-                tmp = self.read_register([self.register_addr['CONVERSION_REG']], 2)
-                self.battery_voltage = float('%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 11))
-                app_log.info("battery_voltage = {}".format(self.battery_voltage))
+                tmp = self.read_register(
+                    [self.register_addr['CONVERSION_REG']], 2)
+                self.battery_voltage = float(
+                    '%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 11))
+                app_log.info("battery_voltage = {}".format(
+                    self.battery_voltage))
             else:
-                tmp = self.read_register([self.register_addr['CONVERSION_REG']], 2)
-                self.voltage = float('%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 21))
+                tmp = self.read_register(
+                    [self.register_addr['CONVERSION_REG']], 2)
+                self.voltage = float(
+                    '%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 21))
                 app_log.info("voltage = {}".format(self.voltage))
 
             msg_id += 1
@@ -477,10 +508,12 @@ class SGM58031Class:
         # -2- Initialise the SGM58031 peripheral
         if self.flip_sign:
             self.register_map['Config_Register'] = (self.register_map['Config_Register'] & 0x8fff) | \
-                                                   (self.mux_sel['AINP_AIN0_AND_AINN_AIN1'] << 12 & 0x7000)
+                                                   (self.mux_sel['AINP_AIN0_AND_AINN_AIN1']
+                                                    << 12 & 0x7000)
         else:
             self.register_map['Config_Register'] = (self.register_map['Config_Register'] & 0x8fff) | \
-                                                   (self.mux_sel['AINP_AIN2_AND_AINN_AIN3'] << 12 & 0x7000)
+                                                   (self.mux_sel['AINP_AIN2_AND_AINN_AIN3']
+                                                    << 12 & 0x7000)
         self.flip_sign = not self.flip_sign
 
         # -3- Set the Configuration Register
@@ -494,7 +527,8 @@ def get_cell_location():
     while True:
         utime.sleep(86400)
         # 1111111122222222  qa6qTK91597826z6
-        cell_location = cellLocator.getLocation("www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1)
+        cell_location = cellLocator.getLocation(
+            "www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1)
         msg_id += 1
         message = {"topic": aliyunClass.property_publish_topic,
                    "msg": msg_cellLocator.format
@@ -565,7 +599,8 @@ def calc_rssi_dbm(rssi_dec):
 
 def battery_pct(battery_level):
     """Calc the battery level to battery pct"""
-    result_pct = float('%.2f' % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
+    result_pct = float('%.2f' %
+                       ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
     if result_pct >= 1.0:
         result_pct = 1.0
     elif result_pct < 0.0:
@@ -606,7 +641,8 @@ def net_callback(*args, **kwargs):
 def pin_interrupt_callback(topic, message):
     # topic = GPIO17_EXINT, message={'gpio': 18, 'pressure': 0}
     # gpio是对应的gpio号, pressure是电压值
-    app_log.info("pin_interrupt_callback, topic: {}, message: {}".format(topic, message))
+    app_log.info(
+        "pin_interrupt_callback, topic: {}, message: {}".format(topic, message))
 
 
 def wdt_kick_callback(topic, msg):
