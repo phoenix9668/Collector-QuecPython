@@ -82,8 +82,45 @@ def uart2_read():
                 Handler.pub(message)
             time_diff = utime.ticks_diff(utime.ticks_ms(), start)
             app_log.info("time_diff = {}".format(time_diff))
+        elif msg_len == 9 or msg_len == 215:
+            app_log.info(msg_len)
+            msg = uart2.read(msg_len)
+            app_log.info("uart2_read msg: {}".format(msg))
+
+            if msg[4] == 0xb2:
+                sgm58031_dev.battery_voltage = float(
+                    '%.3f' % (((msg[5] << 8) | msg[6]) / 32768 * 4.096 * 11))
+                app_log.info("battery_voltage = {}".format(
+                    sgm58031_dev.battery_voltage))
+
+                sgm58031_dev.voltage = float(
+                    '%.3f' % (((msg[7] << 8) | msg[8]) / 32768 * 4.096 * 21))
+                app_log.info("voltage = {}".format(sgm58031_dev.voltage))
+
+                msg_id += 1
+                message = {"topic": aliyunClass.property_publish_topic,
+                           "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
+                Handler.pub(message)
+            elif msg[210] == 0xb2:
+                sgm58031_dev.battery_voltage = float(
+                    '%.3f' % (((msg[211] << 8) | msg[212]) / 32768 * 4.096 * 11))
+                app_log.info("battery_voltage = {}".format(
+                    sgm58031_dev.battery_voltage))
+
+                sgm58031_dev.voltage = float(
+                    '%.3f' % (((msg[213] << 8) | msg[214]) / 32768 * 4.096 * 21))
+                app_log.info("voltage = {}".format(sgm58031_dev.voltage))
+
+                msg_id += 1
+                message = {"topic": aliyunClass.property_publish_topic,
+                           "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
+                Handler.pub(message)
         elif msg_len:
             app_log.info(msg_len)
+            # msg = uart2.read(msg_len)
+            # hex_msg = [hex(x) for x in msg]
+            # app_log.info("uart2_read hex_msg: {}".format(hex_msg))
+
             msg = uart2.read(msg_len).decode()
             app_log.info("uart2_read msg: {}".format(msg))
             msg_id += 1
@@ -147,7 +184,7 @@ class ALiYunClass(object):
         self.ProductKey = "he2maYabo9j"  # 产品标识
         self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-025"  # 设备名称
+        self.DeviceName = "BW-XC-200-021"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -664,7 +701,7 @@ if __name__ == '__main__':
     # 获取服务
     net_ser = guard_context.get_server("net")
     log_ser = guard_context.get_server("log")
-    log_ser.set_level("INFO")
+    log_ser.set_level("WARNING")
     # pm_ser = guard_context.get_server("pm")
     # pm_ser.lock()
     # pm_ser.count()
