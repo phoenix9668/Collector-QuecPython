@@ -19,6 +19,7 @@ uart2 = UART(UART.UART2, 115200, 8, 0, 1, 0)
 uart1 = UART(UART.UART1, 115200, 8, 0, 1, 0)
 signs_data = {}
 msg_id = 0
+buffer = bytearray(2048)  # 用于存储不完整的数据帧
 
 
 def uart2_write(msg):
@@ -28,115 +29,139 @@ def uart2_write(msg):
 
 
 def uart2_read():
-    global uart2, msg_id
+    global uart2, buffer
+
     while True:
         msg_len = uart2.any()
-        if (msg_len % 206 == 0) & (msg_len != 0):
-            start = utime.ticks_ms()
+
+        if msg_len > 0:
             app_log.info(msg_len)
+            # start = utime.ticks_ms()
             msg = uart2.read(msg_len)
             hex_msg = [hex(x) for x in msg]
-            app_log.info("uart2_read msg: {}".format(hex_msg))
+            app_log.debug("uart2_read msg: {}".format(hex_msg))
+            buffer += msg  # 追加读取的新数据到缓冲区
+            app_log.debug("all buffer: {}".format(buffer))
 
-            for i in range(msg_len // 206):
-                temp = 206 * i
-                signs_data['collector_id'] = hex_to_str(
-                    hex_msg[temp:temp + 4], " ")
-                signs_data['rfid'] = hex_to_str(
-                    hex_msg[temp + 5:temp + 11], " ")
-                signs_data['guid'] = hex_to_str(
-                    hex_msg[temp + 11:temp + 43], " ")
-
-                signs_data['rest_array'] = hex_to_str(
-                    hex_msg[temp + 43:temp + 67], " ")
-                signs_data['ingestion_array'] = hex_to_str(
-                    hex_msg[temp + 67:temp + 91], " ")
-                signs_data['movement_array'] = hex_to_str(
-                    hex_msg[temp + 91:temp + 115], " ")
-                signs_data['climb_array'] = hex_to_str(
-                    hex_msg[temp + 115:temp + 139], " ")
-                signs_data['ruminate_array'] = hex_to_str(
-                    hex_msg[temp + 139:temp + 163], " ")
-                signs_data['other_array'] = hex_to_str(
-                    hex_msg[temp + 163:temp + 187], " ")
-
-                signs_data['stage'] = int(hex_msg[temp + 187])
-                signs_data['battery_voltage'] = battery_pct(
-                    (int(hex_msg[temp + 188]) << 8) | int(hex_msg[temp + 189]))
-                signs_data['reset_cnt'] = (
-                    int(hex_msg[temp + 190]) << 8) | int(hex_msg[temp + 191])
-                signs_data['signal_strength'] = calc_rssi_dbm(
-                    int(hex_msg[temp + 192]))
-                signs_data['utc_time'] = int(
-                    round(utime.mktime(utime.localtime()) * 1000))
-                app_log.info(signs_data)
-
-                msg_id += 1
-                message = {"topic": aliyunClass.property_publish_topic,
-                           "msg": msg_signs_data.format
-                           (msg_id, signs_data['collector_id'], signs_data['rfid'],
-                            signs_data['guid'], signs_data['rest_array'], signs_data['ingestion_array'],
-                            signs_data['movement_array'], signs_data['climb_array'], signs_data['ruminate_array'],
-                            signs_data['other_array'], signs_data['stage'], signs_data['battery_voltage'],
-                            signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
-                Handler.pub(message)
-            time_diff = utime.ticks_diff(utime.ticks_ms(), start)
-            app_log.info("time_diff = {}".format(time_diff))
-        elif msg_len == 9 or msg_len == 215:
-            app_log.info(msg_len)
-            msg = uart2.read(msg_len)
-            app_log.info("uart2_read msg: {}".format(msg))
-
-            if msg[4] == 0xb2:
-                sgm58031_dev.battery_voltage = float(
-                    '%.3f' % (((msg[5] << 8) | msg[6]) / 32768 * 4.096 * 11))
-                app_log.info("battery_voltage = {}".format(
-                    sgm58031_dev.battery_voltage))
-
-                sgm58031_dev.voltage = float(
-                    '%.3f' % (((msg[7] << 8) | msg[8]) / 32768 * 4.096 * 21))
-                app_log.info("voltage = {}".format(sgm58031_dev.voltage))
-
-                msg_id += 1
-                message = {"topic": aliyunClass.property_publish_topic,
-                           "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
-                Handler.pub(message)
-            elif msg[210] == 0xb2:
-                sgm58031_dev.battery_voltage = float(
-                    '%.3f' % (((msg[211] << 8) | msg[212]) / 32768 * 4.096 * 11))
-                app_log.info("battery_voltage = {}".format(
-                    sgm58031_dev.battery_voltage))
-
-                sgm58031_dev.voltage = float(
-                    '%.3f' % (((msg[213] << 8) | msg[214]) / 32768 * 4.096 * 21))
-                app_log.info("voltage = {}".format(sgm58031_dev.voltage))
-
-                msg_id += 1
-                message = {"topic": aliyunClass.property_publish_topic,
-                           "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
-                Handler.pub(message)
-        elif msg_len:
-            app_log.info(msg_len)
-            # msg = uart2.read(msg_len)
-            # hex_msg = [hex(x) for x in msg]
-            # app_log.info("uart2_read hex_msg: {}".format(hex_msg))
-
-            msg = uart2.read(msg_len).decode()
-            app_log.info("uart2_read msg: {}".format(msg))
-            msg_id += 1
-            message = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_product_info_StatusInfo.format(msg_id, msg)}
-            Handler.pub(message)
-            if "##Read Memory Complete##" in msg:
-                collector_id = msg[18:26]
-                app_log.info(collector_id)
-                msg_id += 1
-                message = {"topic": aliyunClass.property_publish_topic,
-                           "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
-                Handler.pub(message)
+            while True:
+                frame_processed = process_buffer()
+                if not frame_processed:
+                    break
         else:
             utime.sleep_ms(10)
             continue
+
+
+def process_buffer():
+    global buffer
+    INFO_HEADER_PREFIX = b'\x23\x23'  # 帧头
+    MIN_LENGTH = 9  # 最小帧长度，用于初始条件
+
+    app_log.debug("buffer length: {}".format(len(buffer)))
+    if len(buffer) < 9:
+        return False  # 数据不足以构成任何帧
+
+    i = 0
+    while i <= len(buffer) - MIN_LENGTH:
+        # 查找帧头起始，并检查后续字节
+        if buffer[i:i+2] == INFO_HEADER_PREFIX:
+            process_frame(buffer[i:])
+            buffer_list = list(buffer)
+            buffer_list.clear()
+            buffer = bytearray(buffer_list)  # 重新转换回bytearray
+        elif buffer[i] == 0x0b:
+            # 检查206字节长度的帧
+            if len(buffer) >= i + 6 and buffer[i+4] == 0xb0:
+                if len(buffer) >= i + 206:
+                    process_frame(buffer[i:i+206])
+                    buffer_list = list(buffer)
+                    del buffer_list[:i+206]
+                    buffer = bytearray(buffer_list)  # 重新转换回bytearray
+                    return True
+            # 检查9字节长度的帧
+            elif len(buffer) >= i + 6 and buffer[i+4] == 0xb2:
+                process_frame(buffer[i:i+9])
+                buffer_list = list(buffer)
+                del buffer_list[:i+9]
+                buffer = bytearray(buffer_list)  # 重新转换回bytearray
+                return True
+        i += 1
+
+    # 如果没有匹配到任何帧格式
+    return False
+
+
+def process_frame(frame):
+    global msg_id
+    # 根据帧的内容处理帧数据
+    # 这里应该添加帧的具体处理逻辑，可以加入帧类型分辞
+    if frame[0] == 0x0b and frame[4] == 0xb0:
+        hex_msg = [hex(x) for x in frame]
+        signs_data['collector_id'] = hex_to_str(hex_msg[0:4], " ")
+        signs_data['rfid'] = hex_to_str(
+            hex_msg[5:11], " ")
+        signs_data['guid'] = hex_to_str(
+            hex_msg[11:43], " ")
+
+        signs_data['rest_array'] = hex_to_str(
+            hex_msg[43:67], " ")
+        signs_data['ingestion_array'] = hex_to_str(
+            hex_msg[67:91], " ")
+        signs_data['movement_array'] = hex_to_str(
+            hex_msg[91:115], " ")
+        signs_data['climb_array'] = hex_to_str(
+            hex_msg[115:139], " ")
+        signs_data['ruminate_array'] = hex_to_str(
+            hex_msg[139:163], " ")
+        signs_data['other_array'] = hex_to_str(
+            hex_msg[163:187], " ")
+
+        signs_data['stage'] = int(hex_msg[187])
+        signs_data['battery_voltage'] = battery_pct(
+            (int(hex_msg[188]) << 8) | int(hex_msg[189]))
+        signs_data['reset_cnt'] = (
+            int(hex_msg[190]) << 8) | int(hex_msg[191])
+        signs_data['signal_strength'] = calc_rssi_dbm(
+            int(hex_msg[192]))
+        signs_data['utc_time'] = int(
+            round(utime.mktime(utime.localtime()) * 1000))
+        app_log.info(signs_data)
+
+        msg_id += 1
+        message = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_signs_data.format
+                   (msg_id, signs_data['collector_id'], signs_data['rfid'],
+                    signs_data['guid'], signs_data['rest_array'], signs_data['ingestion_array'],
+                    signs_data['movement_array'], signs_data['climb_array'], signs_data['ruminate_array'],
+                    signs_data['other_array'], signs_data['stage'], signs_data['battery_voltage'],
+                    signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
+        Handler.pub(message)
+    elif frame[0] == 0x0b and frame[4] == 0xb2:
+        sgm58031_dev.battery_voltage = float(
+            '%.3f' % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11))
+        app_log.info("battery_voltage = {}".format(
+            sgm58031_dev.battery_voltage))
+
+        sgm58031_dev.voltage = float(
+            '%.3f' % (((frame[7] << 8) | frame[8]) / 32768 * 4.096 * 21))
+        app_log.info("voltage = {}".format(sgm58031_dev.voltage))
+
+        msg_id += 1
+        message = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
+        Handler.pub(message)
+    elif frame[0] == 0x23 and frame[1] == 0x23:
+        msg_id += 1
+        message = {"topic": aliyunClass.property_publish_topic,
+                   "msg": msg_product_info_StatusInfo.format(msg_id, buffer)}
+        Handler.pub(message)
+        if "##Read Memory Complete##" in buffer:
+            collector_id = buffer[18:26]
+            app_log.info(collector_id)
+            msg_id += 1
+            message = {"topic": aliyunClass.property_publish_topic,
+                       "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
+            Handler.pub(message)
 
 
 def uart1_read():
@@ -184,7 +209,7 @@ class ALiYunClass(object):
         self.ProductKey = "he2maYabo9j"  # 产品标识
         self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-021"  # 设备名称
+        self.DeviceName = "BW-XC-200-022"  # 设备名称
 
         self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
                                         self.DeviceName + "/" + "thing/service/property/set"
@@ -684,6 +709,7 @@ def pin_interrupt_callback(topic, message):
 
 def wdt_kick_callback(topic, msg):
     app_log.info("wdt_kick_callback topic = {} msg = {}".format(topic, msg))
+    Power.powerRestart()
 
 
 def wdt_feed_callback(topic, msg):
@@ -701,7 +727,7 @@ if __name__ == '__main__':
     # 获取服务
     net_ser = guard_context.get_server("net")
     log_ser = guard_context.get_server("log")
-    log_ser.set_level("WARNING")
+    log_ser.set_level("INFO")
     # pm_ser = guard_context.get_server("pm")
     # pm_ser.lock()
     # pm_ser.count()
