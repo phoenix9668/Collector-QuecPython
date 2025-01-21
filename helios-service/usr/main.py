@@ -54,7 +54,7 @@ def uart2_read():
 
 def process_buffer():
     global buffer
-    INFO_HEADER_PREFIX = b'\x23\x23'  # 帧头
+    INFO_HEADER_PREFIX = b"\x23\x23"  # 帧头
     MIN_LENGTH = 9  # 最小帧长度，用于初始条件
 
     app_log.debug("buffer length: {}".format(len(buffer)))
@@ -64,25 +64,25 @@ def process_buffer():
     i = 0
     while i <= len(buffer) - MIN_LENGTH:
         # 查找帧头起始，并检查后续字节
-        if buffer[i:i+2] == INFO_HEADER_PREFIX:
+        if buffer[i : i + 2] == INFO_HEADER_PREFIX:
             process_frame(buffer[i:])
             buffer_list = list(buffer)
             buffer_list.clear()
             buffer = bytearray(buffer_list)  # 重新转换回bytearray
-        elif buffer[i] == 0x0b:
+        elif buffer[i] == 0x0B:
             # 检查206字节长度的帧
-            if len(buffer) >= i + 6 and buffer[i+4] == 0xb0:
+            if len(buffer) >= i + 6 and buffer[i + 4] == 0xB0:
                 if len(buffer) >= i + 206:
-                    process_frame(buffer[i:i+206])
+                    process_frame(buffer[i : i + 206])
                     buffer_list = list(buffer)
-                    del buffer_list[:i+206]
+                    del buffer_list[: i + 206]
                     buffer = bytearray(buffer_list)  # 重新转换回bytearray
                     return True
             # 检查9字节长度的帧
-            elif len(buffer) >= i + 6 and buffer[i+4] == 0xb2:
-                process_frame(buffer[i:i+9])
+            elif len(buffer) >= i + 6 and buffer[i + 4] == 0xB2:
+                process_frame(buffer[i : i + 9])
                 buffer_list = list(buffer)
-                del buffer_list[:i+9]
+                del buffer_list[: i + 9]
                 buffer = bytearray(buffer_list)  # 重新转换回bytearray
                 return True
         i += 1
@@ -95,72 +95,84 @@ def process_frame(frame):
     global msg_id
     # 根据帧的内容处理帧数据
     # 这里应该添加帧的具体处理逻辑，可以加入帧类型分辞
-    if frame[0] == 0x0b and frame[4] == 0xb0:
+    if frame[0] == 0x0B and frame[4] == 0xB0:
         hex_msg = [hex(x) for x in frame]
-        signs_data['collector_id'] = hex_to_str(hex_msg[0:4], " ")
-        signs_data['rfid'] = hex_to_str(
-            hex_msg[5:11], " ")
-        signs_data['guid'] = hex_to_str(
-            hex_msg[11:43], " ")
+        signs_data["collector_id"] = hex_to_str(hex_msg[0:4], " ")
+        signs_data["rfid"] = hex_to_str(hex_msg[5:11], " ")
+        signs_data["guid"] = hex_to_str(hex_msg[11:43], " ")
 
-        signs_data['rest_array'] = hex_to_str(
-            hex_msg[43:67], " ")
-        signs_data['ingestion_array'] = hex_to_str(
-            hex_msg[67:91], " ")
-        signs_data['movement_array'] = hex_to_str(
-            hex_msg[91:115], " ")
-        signs_data['climb_array'] = hex_to_str(
-            hex_msg[115:139], " ")
-        signs_data['ruminate_array'] = hex_to_str(
-            hex_msg[139:163], " ")
-        signs_data['other_array'] = hex_to_str(
-            hex_msg[163:187], " ")
+        signs_data["rest_array"] = hex_to_str(hex_msg[43:67], " ")
+        signs_data["ingestion_array"] = hex_to_str(hex_msg[67:91], " ")
+        signs_data["movement_array"] = hex_to_str(hex_msg[91:115], " ")
+        signs_data["climb_array"] = hex_to_str(hex_msg[115:139], " ")
+        signs_data["ruminate_array"] = hex_to_str(hex_msg[139:163], " ")
+        signs_data["other_array"] = hex_to_str(hex_msg[163:187], " ")
 
-        signs_data['stage'] = int(hex_msg[187])
-        signs_data['battery_voltage'] = battery_pct(
-            (int(hex_msg[188]) << 8) | int(hex_msg[189]))
-        signs_data['reset_cnt'] = (
-            int(hex_msg[190]) << 8) | int(hex_msg[191])
-        signs_data['signal_strength'] = calc_rssi_dbm(
-            int(hex_msg[192]))
-        signs_data['utc_time'] = int(
-            round(utime.mktime(utime.localtime()) * 1000))
+        signs_data["stage"] = int(hex_msg[187])
+        signs_data["battery_voltage"] = battery_pct(
+            (int(hex_msg[188]) << 8) | int(hex_msg[189])
+        )
+        signs_data["reset_cnt"] = (int(hex_msg[190]) << 8) | int(hex_msg[191])
+        signs_data["signal_strength"] = calc_rssi_dbm(int(hex_msg[192]))
+        signs_data["utc_time"] = int(round(utime.mktime(utime.localtime()) * 1000))
         app_log.info(signs_data)
 
         msg_id += 1
-        message = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_signs_data.format
-                   (msg_id, signs_data['collector_id'], signs_data['rfid'],
-                    signs_data['guid'], signs_data['rest_array'], signs_data['ingestion_array'],
-                    signs_data['movement_array'], signs_data['climb_array'], signs_data['ruminate_array'],
-                    signs_data['other_array'], signs_data['stage'], signs_data['battery_voltage'],
-                    signs_data['reset_cnt'], signs_data['signal_strength'], signs_data['utc_time'])}
+        message = {
+            "topic": aliyunClass.property_publish_topic,
+            "msg": msg_signs_data.format(
+                msg_id,
+                signs_data["collector_id"],
+                signs_data["rfid"],
+                signs_data["guid"],
+                signs_data["rest_array"],
+                signs_data["ingestion_array"],
+                signs_data["movement_array"],
+                signs_data["climb_array"],
+                signs_data["ruminate_array"],
+                signs_data["other_array"],
+                signs_data["stage"],
+                signs_data["battery_voltage"],
+                signs_data["reset_cnt"],
+                signs_data["signal_strength"],
+                signs_data["utc_time"],
+            ),
+        }
         Handler.pub(message)
-    elif frame[0] == 0x0b and frame[4] == 0xb2:
+    elif frame[0] == 0x0B and frame[4] == 0xB2:
         sgm58031_dev.battery_voltage = float(
-            '%.3f' % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11))
-        app_log.info("battery_voltage = {}".format(
-            sgm58031_dev.battery_voltage))
+            "%.3f" % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11)
+        )
+        app_log.info("battery_voltage = {}".format(sgm58031_dev.battery_voltage))
 
         sgm58031_dev.voltage = float(
-            '%.3f' % (((frame[7] << 8) | frame[8]) / 32768 * 4.096 * 21))
+            "%.3f" % (((frame[7] << 8) | frame[8]) / 32768 * 4.096 * 21)
+        )
         app_log.info("voltage = {}".format(sgm58031_dev.voltage))
 
         msg_id += 1
-        message = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_voltage.format(msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage)}
+        message = {
+            "topic": aliyunClass.property_publish_topic,
+            "msg": msg_voltage.format(
+                msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage
+            ),
+        }
         Handler.pub(message)
     elif frame[0] == 0x23 and frame[1] == 0x23:
         msg_id += 1
-        message = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_product_info_StatusInfo.format(msg_id, buffer)}
+        message = {
+            "topic": aliyunClass.property_publish_topic,
+            "msg": msg_product_info_StatusInfo.format(msg_id, buffer),
+        }
         Handler.pub(message)
         if "##Read Memory Complete##" in buffer:
             collector_id = buffer[18:26]
             app_log.info(collector_id)
             msg_id += 1
-            message = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_product_info_CollectorID.format(msg_id, collector_id)}
+            message = {
+                "topic": aliyunClass.property_publish_topic,
+                "msg": msg_product_info_CollectorID.format(msg_id, collector_id),
+            }
             Handler.pub(message)
 
 
@@ -176,19 +188,22 @@ def uart1_read():
             app_log.info("gprmc_info = {}".format(gprmc_info))
 
             msg_id += 1
-            message = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_geoLocation.format
-                       (msg_id, gprmc_info[0], gprmc_info[1], gprmc_info[2], 1)}
+            message = {
+                "topic": aliyunClass.property_publish_topic,
+                "msg": msg_geoLocation.format(
+                    msg_id, gprmc_info[0], gprmc_info[1], gprmc_info[2], 1
+                ),
+            }
             Handler.pub(message)
 
 
 def hex_to_str(a, b=""):
-    string = ''.join([hex_byte.replace('0x', b) for hex_byte in a])
+    string = "".join([hex_byte.replace("0x", b) for hex_byte in a])
     return string
 
 
 def str_to_hex(s):
-    list_hex = ' '.join([hex(ord(c)) for c in s]).split()
+    list_hex = " ".join([hex(ord(c)) for c in s]).split()
     list_temp = [int(i, 16) for i in list_hex]
     byte_array = bytearray(list_temp)
     return byte_array
@@ -207,25 +222,40 @@ class ALiYunClass(object):
         # self.ProductKey = "he2maYabo9j"  # 产品标识
         # self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
         self.ProductKey = "he2maYabo9j"  # 产品标识
-        self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
+        self.ProductSecret = (
+            "5rcZakY48A2bHhXH"  # 产品密钥（一机一密认证此参数传入None）
+        )
         self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-022"  # 设备名称
+        self.DeviceName = "BW-XC-200-035"  # 设备名称
 
-        self.property_subscribe_topic = "/sys" + "/" + self.ProductKey + "/" + \
-                                        self.DeviceName + "/" + "thing/service/property/set"
-        self.property_publish_topic = "/sys" + "/" + self.ProductKey + "/" + \
-                                      self.DeviceName + "/" + "thing/event/property/post"
+        self.property_subscribe_topic = (
+            "/sys"
+            + "/"
+            + self.ProductKey
+            + "/"
+            + self.DeviceName
+            + "/"
+            + "thing/service/property/set"
+        )
+        self.property_publish_topic = (
+            "/sys"
+            + "/"
+            + self.ProductKey
+            + "/"
+            + self.DeviceName
+            + "/"
+            + "thing/event/property/post"
+        )
 
         # 创建aliyun连接对象
         self.ali = aLiYun(
-            self.ProductKey,
-            self.ProductSecret,
-            self.DeviceName,
-            self.DeviceSecret)
+            self.ProductKey, self.ProductSecret, self.DeviceName, self.DeviceSecret
+        )
         # 设置mqtt连接属性
         client_id = self.ProductKey + "." + self.DeviceName  # 自定义字符（不超过64）
-        self.ali.setMqtt(client_id, clean_session=False,
-                         keepAlive=60, reconn=True)  # False True
+        self.ali.setMqtt(
+            client_id, clean_session=False, keepAlive=60, reconn=True
+        )  # False True
 
         # 设置回调函数
         self.ali.setCallback(self.ali_sub_cb)
@@ -240,7 +270,7 @@ class ALiYunClass(object):
 
     def ali_start(self):
         self.ali.start()
-        print('Running')
+        print("Running")
 
     def ali_stop(self):
         self.ali.disconnect()
@@ -251,9 +281,9 @@ class ALiYunClass(object):
     def ali_publish(self, topic, msg):
         if not self.ali.getAliyunSta():
             try:
-                self.ali.publish(msg.get('topic'), msg.get("msg"), qos=0)
+                self.ali.publish(msg.get("topic"), msg.get("msg"), qos=0)
             except BaseException:
-                print('send fail!!!')
+                print("send fail!!!")
 
 
 class Handler(object):
@@ -262,24 +292,29 @@ class Handler(object):
         global msg_id
         print(
             "Subscribe Recv: Topic={},Msg={}".format(
-                msg.get("topic").decode(),
-                msg.get("msg").decode()))
+                msg.get("topic").decode(), msg.get("msg").decode()
+            )
+        )
         msg_dict = ujson.loads(msg.get("msg").decode())
         app_log.info(msg_dict)
-        if 'params' in msg_dict.keys():
-            params_dict = msg_dict['params']
-            if 'product_information:SendCommand' in params_dict.keys():
-                app_log.info(params_dict['product_information:SendCommand'])
+        if "params" in msg_dict.keys():
+            params_dict = msg_dict["params"]
+            if "product_information:SendCommand" in params_dict.keys():
+                app_log.info(params_dict["product_information:SendCommand"])
                 msg_id += 1
-                message = {"topic": aliyunClass.property_publish_topic,
-                           "msg": msg_product_info_SendCommand.format
-                           (msg_id, params_dict['product_information:SendCommand'])}
+                message = {
+                    "topic": aliyunClass.property_publish_topic,
+                    "msg": msg_product_info_SendCommand.format(
+                        msg_id, params_dict["product_information:SendCommand"]
+                    ),
+                }
                 Handler.pub(message)
-                if params_dict['product_information:SendCommand'] == 'reset':
+                if params_dict["product_information:SendCommand"] == "reset":
                     Power.powerRestart()
                 else:
                     hex_array = str_to_hex(
-                        params_dict['product_information:SendCommand'])
+                        params_dict["product_information:SendCommand"]
+                    )
                     uart2_write(hex_array)
 
     @classmethod
@@ -303,7 +338,7 @@ class Handler(object):
 
 
 class AHT10Class:
-    """ AHT10 class, incloud reset, read, write, measurement function"""
+    """AHT10 class, incloud reset, read, write, measurement function"""
 
     def __init__(self, addr=0x38, alise="AHT10"):
         # Initialization command
@@ -331,37 +366,38 @@ class AHT10Class:
         utime.sleep_ms(20)  # at last 20ms
 
     def write_data(self, data):
-        self.i2c_dev.write(self.i2c_addr,
-                           bytearray(0x00), 0,
-                           bytearray(data), len(data))
+        self.i2c_dev.write(
+            self.i2c_addr, bytearray(0x00), 0, bytearray(data), len(data)
+        )
 
     def read_data(self, length):
         r_data = [0x00 for _ in range(length)]
         r_data = bytearray(r_data)
-        self.i2c_dev.read(self.i2c_addr,
-                          bytearray(0x00), 0,
-                          r_data, length,
-                          0)
+        self.i2c_dev.read(self.i2c_addr, bytearray(0x00), 0, r_data, length, 0)
         return list(r_data)
 
     def aht10_transformation_temperature(self, data):
         global msg_id
         r_data = data
         # Convert the temperature as described in the data book
-        self.humidity = (r_data[0] << 12) | (
-            r_data[1] << 4) | ((r_data[2] & 0xF0) >> 4)
-        self.humidity = float('%.2f' % ((self.humidity / (1 << 20)) * 100.0))
+        self.humidity = (r_data[0] << 12) | (r_data[1] << 4) | ((r_data[2] & 0xF0) >> 4)
+        self.humidity = float("%.2f" % ((self.humidity / (1 << 20)) * 100.0))
         # print("current humidity is {0}%".format(self.humidity))
-        self.temperature = ((r_data[2] & 0xf) << 16) | (
-            r_data[3] << 8) | r_data[4]
-        self.temperature = float(
-            '%.2f' % ((self.temperature * 200.0 / (1 << 20)) - 50))
+        self.temperature = ((r_data[2] & 0xF) << 16) | (r_data[3] << 8) | r_data[4]
+        self.temperature = float("%.2f" % ((self.temperature * 200.0 / (1 << 20)) - 50))
         # print("current temperature is {0}°C".format(self.temperature))
-        app_log.info("current temperature = {}°C, current humidity = {}%".format(
-            self.temperature, self.humidity))
+        app_log.info(
+            "current temperature = {}°C, current humidity = {}%".format(
+                self.temperature, self.humidity
+            )
+        )
         msg_id += 1
-        message = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_temperature_humidity.format(msg_id, self.temperature, self.humidity)}
+        message = {
+            "topic": aliyunClass.property_publish_topic,
+            "msg": msg_temperature_humidity.format(
+                msg_id, self.temperature, self.humidity
+            ),
+        }
         Handler.pub(message)
 
     def trigger_measurement(self):
@@ -378,41 +414,64 @@ class AHT10Class:
 
 
 class SGM58031Class:
-    """ SGM58031 class, incloud read and write function"""
+    """SGM58031 class, incloud read and write function"""
 
     def __init__(self, addr=0x48, alise="SGM58031"):
         # Initialization command
         self.i2c_dev = I2C(I2C.I2C1, I2C.STANDARD_MODE)  # Return I2C object
         self.i2c_addr = addr
 
-        self.register_map = {'Conversion_Register': 0x0000, 'Config_Register': 0x0000, 'Low_Thresh_Register': 0x8000,
-                             'High_Thresh_Register': 0x7FFF, 'Config1_Register': 0x0000, 'Chip_ID_Register': 0x0000,
-                             'GN_Trim1_Register': 0x0000}
+        self.register_map = {
+            "Conversion_Register": 0x0000,
+            "Config_Register": 0x0000,
+            "Low_Thresh_Register": 0x8000,
+            "High_Thresh_Register": 0x7FFF,
+            "Config1_Register": 0x0000,
+            "Chip_ID_Register": 0x0000,
+            "GN_Trim1_Register": 0x0000,
+        }
 
-        self.register_addr = {'CONVERSION_REG': 0x00, 'CONF_REG': 0x01, 'LOW_THRESH_REG': 0x02,
-                              'HIGH_THRESH_REG': 0x03, 'CONF1_REG': 0x04, 'CHIP_ID_REG': 0x05, 'GN_TRIM1_REG': 0x06}
+        self.register_addr = {
+            "CONVERSION_REG": 0x00,
+            "CONF_REG": 0x01,
+            "LOW_THRESH_REG": 0x02,
+            "HIGH_THRESH_REG": 0x03,
+            "CONF1_REG": 0x04,
+            "CHIP_ID_REG": 0x05,
+            "GN_TRIM1_REG": 0x06,
+        }
 
-        self.os_sel = {'No_Effect': 0x00,  # 0 = No effect
-                       'Start_Single_Conversion': 0x01}  # 1 = Start a single conversion (when in single-shot mode)
+        self.os_sel = {
+            "No_Effect": 0x00,  # 0 = No effect
+            # 1 = Start a single conversion (when in single-shot mode)
+            "Start_Single_Conversion": 0x01,
+        }
 
-        self.mux_sel = {'AINP_AIN0_AND_AINN_AIN1': 0x00,  # 000 = AINP = AIN0 and AINN = AIN1 (default)
-                        'AINP_AIN0_AND_AINN_AIN3': 0x01,  # 001 = AINP = AIN0 and AINN = AIN3
-                        'AINP_AIN1_AND_AINN_AIN3': 0x02,  # 010 = AINP = AIN1 and AINN = AIN3
-                        'AINP_AIN2_AND_AINN_AIN3': 0x03,  # 011 = AINP = AIN2 and AINN = AIN3
-                        'AINP_AIN0_AND_AINN_GND': 0x04,  # 100 = AINP = AIN0 and AINN = GND
-                        'AINP_AIN1_AND_AINN_GND': 0x05,  # 101 = AINP = AIN1 and AINN = GND
-                        'AINP_AIN2_AND_AINN_GND': 0x06,  # 110 = AINP = AIN2 and AINN = GND
-                        'AINP_AIN3_AND_AINN_GND': 0x07}  # 111 = AINP = AIN3 and AINN = GND
+        self.mux_sel = {
+            "AINP_AIN0_AND_AINN_AIN1": 0x00,  # 000 = AINP = AIN0 and AINN = AIN1 (default)
+            "AINP_AIN0_AND_AINN_AIN3": 0x01,  # 001 = AINP = AIN0 and AINN = AIN3
+            "AINP_AIN1_AND_AINN_AIN3": 0x02,  # 010 = AINP = AIN1 and AINN = AIN3
+            "AINP_AIN2_AND_AINN_AIN3": 0x03,  # 011 = AINP = AIN2 and AINN = AIN3
+            "AINP_AIN0_AND_AINN_GND": 0x04,  # 100 = AINP = AIN0 and AINN = GND
+            "AINP_AIN1_AND_AINN_GND": 0x05,  # 101 = AINP = AIN1 and AINN = GND
+            "AINP_AIN2_AND_AINN_GND": 0x06,  # 110 = AINP = AIN2 and AINN = GND
+            "AINP_AIN3_AND_AINN_GND": 0x07,
+        }  # 111 = AINP = AIN3 and AINN = GND
 
-        self.pga_sel = {'FS_6_144V': 0x00,  # 000 = FS = +/-6.144V
-                        'FS_4_096V': 0x01,  # 001 = FS = +/-4.096V
-                        'FS_2_048V': 0x02,  # 010 = FS = +/-2.048V (default)
-                        'FS_1_024V': 0x03,  # 011 = FS = +/-1.024V
-                        'FS_0_512V': 0x04,  # 100 = FS = +/-0.512V
-                        'FS_0_256V': 0x05}  # 101 = FS = +/-0.256V
+        self.pga_sel = {
+            "FS_6_144V": 0x00,  # 000 = FS = +/-6.144V
+            "FS_4_096V": 0x01,  # 001 = FS = +/-4.096V
+            "FS_2_048V": 0x02,  # 010 = FS = +/-2.048V (default)
+            "FS_1_024V": 0x03,  # 011 = FS = +/-1.024V
+            "FS_0_512V": 0x04,  # 100 = FS = +/-0.512V
+            "FS_0_256V": 0x05,
+        }  # 101 = FS = +/-0.256V
 
-        self.mode_sel = {'Continuous_Conversion_Mode': 0x00,  # 0 = Continuous conversion mode
-                         'Single_Shot_Mode': 0x01}  # 1 = Power-down single-shot mode (default)
+        self.mode_sel = {
+            "Continuous_Conversion_Mode": 0x00,  # 0 = Continuous conversion mode
+            # 1 = Power-down single-shot mode (default)
+            "Single_Shot_Mode": 0x01,
+        }
 
         # | DR[2:0]Bits        | DR_SEL Bit in Config1Register |
         # | in Config Register | DR_SEL = 0 | DR_SEL = 1 |
@@ -424,29 +483,39 @@ class SGM58031Class:
         # | 101                | 200Hz      | 240Hz      |
         # | 110                | 400Hz      | 480Hz      |
         # | 111                | 800Hz      | 960HZ      |
-        self.dr_sel = {'DR_6_25Hz_7_5Hz': 0x00,
-                       'DR_12_5Hz_15Hz': 0x01,
-                       'DR_25Hz_30Hz': 0x02,
-                       'DR_50Hz_60Hz': 0x03,
-                       'DR_100Hz_120Hz': 0x04,
-                       'DR_200Hz_240Hz': 0x05,
-                       'DR_400Hz_480Hz': 0x06,
-                       'DR_800Hz_960Hz': 0x07}
+        self.dr_sel = {
+            "DR_6_25Hz_7_5Hz": 0x00,
+            "DR_12_5Hz_15Hz": 0x01,
+            "DR_25Hz_30Hz": 0x02,
+            "DR_50Hz_60Hz": 0x03,
+            "DR_100Hz_120Hz": 0x04,
+            "DR_200Hz_240Hz": 0x05,
+            "DR_400Hz_480Hz": 0x06,
+            "DR_800Hz_960Hz": 0x07,
+        }
 
-        self.comp_mode_sel = {'Traditional_Comparator': 0x00,  # 0 = A traditional comparator with hysteresis (default)
-                              'Window_Comparator': 0x01}  # 1 = A window comparator
+        self.comp_mode_sel = {
+            "Traditional_Comparator": 0x00,  # 0 = A traditional comparator with hysteresis (default)
+            "Window_Comparator": 0x01,
+        }  # 1 = A window comparator
 
-        self.comp_pol_sel = {'Active_Low': 0x00, 'Active_High': 0x01}
-        self.comp_lat_sel = {'Non_Latching': 0x00, 'Latching': 0x01}
+        self.comp_pol_sel = {"Active_Low": 0x00, "Active_High": 0x01}
+        self.comp_lat_sel = {"Non_Latching": 0x00, "Latching": 0x01}
 
-        self.comp_que_sel = {'Assert_After_One_Conversion': 0x00,  # 00 = Assert after one conversion
-                             'Assert_After_Two_Conversions': 0x01,  # 01 = Assert after two conversions
-                             'Assert_After_Four_Conversions': 0x02,  # 10 = Assert after four conversions
-                             'Disable_Comparator': 0x03}  # Disable comparator (default)
+        self.comp_que_sel = {
+            "Assert_After_One_Conversion": 0x00,  # 00 = Assert after one conversion
+            "Assert_After_Two_Conversions": 0x01,  # 01 = Assert after two conversions
+            "Assert_After_Four_Conversions": 0x02,  # 10 = Assert after four conversions
+            # Disable comparator (default)
+            "Disable_Comparator": 0x03,
+        }
 
-        self.dr_sel_sel = {'DR_SEL0': 0x00,  # 0 = DR[2:0] = 000 ~ 111 for conversion rate of 6.25Hz, 12.5Hz, 25Hz,
-                           # 50Hz, 100Hz, 200Hz, 400Hz and 800Hz (default)
-                           'DR_SEL1': 0x01}  # 1 = DR[2:0] = 000 ~ 111 for conversion rate of 7.5Hz, 15Hz, 30Hz,
+        self.dr_sel_sel = {
+            "DR_SEL0": 0x00,  # 0 = DR[2:0] = 000 ~ 111 for conversion rate of 6.25Hz, 12.5Hz, 25Hz,
+            # 50Hz, 100Hz, 200Hz, 400Hz and 800Hz (default)
+            # 1 = DR[2:0] = 000 ~ 111 for conversion rate of 7.5Hz, 15Hz, 30Hz,
+            "DR_SEL1": 0x01,
+        }
         # 60Hz, 120Hz, 240Hz, 480Hz and 960Hz
         self.battery_voltage = None
         self.voltage = None
@@ -456,132 +525,171 @@ class SGM58031Class:
 
     def config_reg_init(self, low_thresh_register=0x8000, high_thresh_register=0x7FFF):
         # Initialise the SGM58031 registers
-        self.register_map['Config_Register'] = (self.os_sel['Start_Single_Conversion'] << 15 & 0x8000) | \
-                                               (self.mux_sel['AINP_AIN2_AND_AINN_AIN3'] << 12 & 0x7000) | \
-                                               (self.pga_sel['FS_4_096V'] << 9 & 0x0E00) | \
-                                               (self.mode_sel['Single_Shot_Mode'] << 8 & 0x0100) | \
-                                               (self.dr_sel['DR_800Hz_960Hz'] << 5 & 0x00E0) | \
-                                               (self.comp_mode_sel['Traditional_Comparator'] << 4 & 0x0010) | \
-                                               (self.comp_pol_sel['Active_Low'] << 3 & 0x0008) | \
-                                               (self.comp_lat_sel['Non_Latching'] << 2 & 0x0004) | \
-                                               (self.comp_que_sel['Disable_Comparator'])
-        self.register_map['Low_Thresh_Register'] = low_thresh_register
-        self.register_map['High_Thresh_Register'] = high_thresh_register
-        self.register_map['Config1_Register'] = (
-            self.dr_sel_sel['DR_SEL0'] << 7 & 0x0080)
+        self.register_map["Config_Register"] = (
+            (self.os_sel["Start_Single_Conversion"] << 15 & 0x8000)
+            | (self.mux_sel["AINP_AIN2_AND_AINN_AIN3"] << 12 & 0x7000)
+            | (self.pga_sel["FS_4_096V"] << 9 & 0x0E00)
+            | (self.mode_sel["Single_Shot_Mode"] << 8 & 0x0100)
+            | (self.dr_sel["DR_800Hz_960Hz"] << 5 & 0x00E0)
+            | (self.comp_mode_sel["Traditional_Comparator"] << 4 & 0x0010)
+            | (self.comp_pol_sel["Active_Low"] << 3 & 0x0008)
+            | (self.comp_lat_sel["Non_Latching"] << 2 & 0x0004)
+            | (self.comp_que_sel["Disable_Comparator"])
+        )
+        self.register_map["Low_Thresh_Register"] = low_thresh_register
+        self.register_map["High_Thresh_Register"] = high_thresh_register
+        self.register_map["Config1_Register"] = self.dr_sel_sel["DR_SEL0"] << 7 & 0x0080
         pass
 
     def self_verifying(self):
         # -1- Read_CHIP_ID
-        tmp = self.read_register([self.register_addr['CHIP_ID_REG']], 2)
+        tmp = self.read_register([self.register_addr["CHIP_ID_REG"]], 2)
         print("####################################################################")
-        print("----------------------------CHIP_ID = %x----------------------------"
-              % ((tmp[0] << 8) | tmp[1]))
+        print(
+            "----------------------------CHIP_ID = %x----------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
         if ((tmp[0] << 8) | tmp[1]) != 0x80:
             return False
         # -2- Set the Configuration Register
-        self.write_register([self.register_addr['CONF_REG']],
-                            [self.register_map['Config_Register'] >> 8,
-                             (self.register_map['Config_Register'] & 0xff)])
+        self.write_register(
+            [self.register_addr["CONF_REG"]],
+            [
+                self.register_map["Config_Register"] >> 8,
+                (self.register_map["Config_Register"] & 0xFF),
+            ],
+        )
         # -3- Read the Configuration Register
-        tmp = self.read_register([self.register_addr['CONF_REG']], 2)
-        print("--------------------------CONF_REG = %x---------------------------"
-              % ((tmp[0] << 8) | tmp[1]))
-        if (((tmp[0] << 8) | tmp[1]) & 0x7fff) != (self.register_map['Config_Register'] & 0x7fff):
+        tmp = self.read_register([self.register_addr["CONF_REG"]], 2)
+        print(
+            "--------------------------CONF_REG = %x---------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if (((tmp[0] << 8) | tmp[1]) & 0x7FFF) != (
+            self.register_map["Config_Register"] & 0x7FFF
+        ):
             return False
 
         # -4- Set the Configuration1 Register
-        self.write_register([self.register_addr['CONF1_REG']],
-                            [self.register_map['Config1_Register'] >> 8,
-                             (self.register_map['Config1_Register'] & 0xff)])
+        self.write_register(
+            [self.register_addr["CONF1_REG"]],
+            [
+                self.register_map["Config1_Register"] >> 8,
+                (self.register_map["Config1_Register"] & 0xFF),
+            ],
+        )
         # -5- Read the Configuration1 Register
-        tmp = self.read_register([self.register_addr['CONF1_REG']], 2)
-        print("----------------------------CONF1_REG = %x---------------------------"
-              % ((tmp[0] << 8) | tmp[1]))
-        if ((tmp[0] << 8) | tmp[1]) != self.register_map['Config1_Register']:
+        tmp = self.read_register([self.register_addr["CONF1_REG"]], 2)
+        print(
+            "----------------------------CONF1_REG = %x---------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["Config1_Register"]:
             return False
 
         # -6- Set the Low Thresh Register
-        self.write_register([self.register_addr['LOW_THRESH_REG']],
-                            [self.register_map['Low_Thresh_Register'] >> 8,
-                             (self.register_map['Low_Thresh_Register'] & 0xff)])
+        self.write_register(
+            [self.register_addr["LOW_THRESH_REG"]],
+            [
+                self.register_map["Low_Thresh_Register"] >> 8,
+                (self.register_map["Low_Thresh_Register"] & 0xFF),
+            ],
+        )
         # -7- Read the Low Thresh Register
-        tmp = self.read_register([self.register_addr['LOW_THRESH_REG']], 2)
-        print("---------------------Low_Thresh_Register = %x---------------------"
-              % ((tmp[0] << 8) | tmp[1]))
-        if ((tmp[0] << 8) | tmp[1]) != self.register_map['Low_Thresh_Register']:
+        tmp = self.read_register([self.register_addr["LOW_THRESH_REG"]], 2)
+        print(
+            "---------------------Low_Thresh_Register = %x---------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["Low_Thresh_Register"]:
             return False
 
         # -8- Set the High Thresh Register
-        self.write_register([self.register_addr['HIGH_THRESH_REG']],
-                            [self.register_map['High_Thresh_Register'] >> 8,
-                             (self.register_map['High_Thresh_Register'] & 0xff)])
+        self.write_register(
+            [self.register_addr["HIGH_THRESH_REG"]],
+            [
+                self.register_map["High_Thresh_Register"] >> 8,
+                (self.register_map["High_Thresh_Register"] & 0xFF),
+            ],
+        )
         # -9- Read the High Thresh Register
-        tmp = self.read_register([self.register_addr['HIGH_THRESH_REG']], 2)
-        print("--------------------High_Thresh_Register = %x---------------------"
-              % ((tmp[0] << 8) | tmp[1]))
-        if ((tmp[0] << 8) | tmp[1]) != self.register_map['High_Thresh_Register']:
+        tmp = self.read_register([self.register_addr["HIGH_THRESH_REG"]], 2)
+        print(
+            "--------------------High_Thresh_Register = %x---------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["High_Thresh_Register"]:
             return False
         print("--------------------sgm58031 initial completed~!--------------------")
         print("####################################################################")
         return True
 
     def write_register(self, register_addr, bytes_list):
-        self.i2c_dev.write(self.i2c_addr,
-                           bytearray(register_addr), len(register_addr),
-                           bytearray(bytes_list), len(bytes_list))
+        self.i2c_dev.write(
+            self.i2c_addr,
+            bytearray(register_addr),
+            len(register_addr),
+            bytearray(bytes_list),
+            len(bytes_list),
+        )
 
     def read_register(self, register_addr, length):
         bytes_list = [0x00 for _ in range(length)]
         bytes_list = bytearray(bytes_list)
-        self.i2c_dev.write(self.i2c_addr,
-                           bytearray(register_addr), len(register_addr),
-                           bytearray(0x00), 0)
-        self.i2c_dev.read(self.i2c_addr,
-                          bytearray(0x00), 0,
-                          bytes_list, length,
-                          0)
+        self.i2c_dev.write(
+            self.i2c_addr,
+            bytearray(register_addr),
+            len(register_addr),
+            bytearray(0x00),
+            0,
+        )
+        self.i2c_dev.read(self.i2c_addr, bytearray(0x00), 0, bytes_list, length, 0)
         return list(bytes_list)
 
     def measure_adc_value(self):
         # -1- read the OS of Configuration Register
         global msg_id
-        tmp = self.read_register([self.register_addr['CONF_REG']], 2)
+        tmp = self.read_register([self.register_addr["CONF_REG"]], 2)
         if tmp[0] >> 7 == 1:
             if self.flip_sign:
-                tmp = self.read_register(
-                    [self.register_addr['CONVERSION_REG']], 2)
+                tmp = self.read_register([self.register_addr["CONVERSION_REG"]], 2)
                 self.battery_voltage = float(
-                    '%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 11))
-                app_log.info("battery_voltage = {}".format(
-                    self.battery_voltage))
+                    "%.3f" % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 11)
+                )
+                app_log.info("battery_voltage = {}".format(self.battery_voltage))
             else:
-                tmp = self.read_register(
-                    [self.register_addr['CONVERSION_REG']], 2)
+                tmp = self.read_register([self.register_addr["CONVERSION_REG"]], 2)
                 self.voltage = float(
-                    '%.3f' % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 21))
+                    "%.3f" % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 21)
+                )
                 app_log.info("voltage = {}".format(self.voltage))
 
             msg_id += 1
-            message = {"topic": aliyunClass.property_publish_topic,
-                       "msg": msg_voltage.format(msg_id, self.battery_voltage, self.voltage)}
+            message = {
+                "topic": aliyunClass.property_publish_topic,
+                "msg": msg_voltage.format(msg_id, self.battery_voltage, self.voltage),
+            }
             Handler.pub(message)
 
         # -2- Initialise the SGM58031 peripheral
         if self.flip_sign:
-            self.register_map['Config_Register'] = (self.register_map['Config_Register'] & 0x8fff) | \
-                                                   (self.mux_sel['AINP_AIN0_AND_AINN_AIN1']
-                                                    << 12 & 0x7000)
+            self.register_map["Config_Register"] = (
+                self.register_map["Config_Register"] & 0x8FFF
+            ) | (self.mux_sel["AINP_AIN0_AND_AINN_AIN1"] << 12 & 0x7000)
         else:
-            self.register_map['Config_Register'] = (self.register_map['Config_Register'] & 0x8fff) | \
-                                                   (self.mux_sel['AINP_AIN2_AND_AINN_AIN3']
-                                                    << 12 & 0x7000)
+            self.register_map["Config_Register"] = (
+                self.register_map["Config_Register"] & 0x8FFF
+            ) | (self.mux_sel["AINP_AIN2_AND_AINN_AIN3"] << 12 & 0x7000)
         self.flip_sign = not self.flip_sign
 
         # -3- Set the Configuration Register
-        self.write_register([self.register_addr['CONF_REG']],
-                            [self.register_map['Config_Register'] >> 8,
-                             (self.register_map['Config_Register'] & 0xff)])
+        self.write_register(
+            [self.register_addr["CONF_REG"]],
+            [
+                self.register_map["Config_Register"] >> 8,
+                (self.register_map["Config_Register"] & 0xFF),
+            ],
+        )
 
 
 def get_cell_location():
@@ -590,11 +698,15 @@ def get_cell_location():
         utime.sleep(86400)
         # 1111111122222222  qa6qTK91597826z6
         cell_location = cellLocator.getLocation(
-            "www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1)
+            "www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1
+        )
         msg_id += 1
-        message = {"topic": aliyunClass.property_publish_topic,
-                   "msg": msg_cellLocator.format
-                   (msg_id, cell_location[0], cell_location[1], cell_location[2])}
+        message = {
+            "topic": aliyunClass.property_publish_topic,
+            "msg": msg_cellLocator.format(
+                msg_id, cell_location[0], cell_location[1], cell_location[2]
+            ),
+        }
         Handler.pub(message)
 
 
@@ -603,15 +715,24 @@ def get_sim():
     sim_imsi = net_ser.sim.getImsi()
     sim_iccid = net_ser.sim.getIccid()
     msg_id += 1
-    message = {"topic": aliyunClass.property_publish_topic,
-               "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid)}
+    message = {
+        "topic": aliyunClass.property_publish_topic,
+        "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid),
+    }
     Handler.pub(message)
+
+
+def power_restart():
+    utime.sleep(10)
+    while True:
+        utime.sleep(14400)
+        Power.powerRestart()
 
 
 def parse_loc_val(val, d):
     v = float(val) / 100
     v = int(v) + (v - int(v)) * 100 / 60
-    if d == 'S' or d == 'W':
+    if d == "S" or d == "W":
         v = v * -1
     return v
 
@@ -622,8 +743,8 @@ def parse_gprmc(data):
     b'$GPRMC,,V,,,,,,,,,,N*53\r\n'
     b'$GPRMC,024443.0,A,2517.038296,N,11019.174048,E,0.0,,120201,0.0,E,A*2F\r\n'
     $GPRMC,<1>,<2>,<3>,<4>,<5>,<6>,<7>,<8>,<9>,<10>,<11>,<12>*hh<CR><LF>
-    <1> UTC时间，hhmmss（时分秒）格式
-    <2> 定位状态，A=有效定位，V=无效定位
+    <1> UTC时间,hhmmss(时分秒)格式
+    <2> 定位状态,A=有效定位,V=无效定位
     <3> 纬度ddmm.mmmm（度分）格式（前面的0也将被传输）
     <4> 纬度半球N（北半球）或S（南半球）
     <5> 经度dddmm.mmmm（度分）格式（前面的0也将被传输）
@@ -635,9 +756,9 @@ def parse_gprmc(data):
     <11> 磁偏角方向，E（东）或W（西）
     <12> 模式指示（仅NMEA0183 3.00版本输出，A=自主定位，D=差分，E=估算，N=数据无效）
     """
-    li = data.decode().replace('$GPRMC,', '').strip().split(',')
+    li = data.decode().replace("$GPRMC,", "").strip().split(",")
     lat = log = speed = direct = 0
-    if li[1] == 'A':
+    if li[1] == "A":
         lat = round(parse_loc_val(li[2], li[3]), 6)  # 纬度
         log = round(parse_loc_val(li[4], li[5]), 6)  # 经度
         speed = float(li[6]) * 1.852
@@ -656,13 +777,12 @@ def calc_rssi_dbm(rssi_dec):
         rssi_dbm = (rssi_dec - 256) / 2 - rssi_offset
     else:
         rssi_dbm = (rssi_dec / 2) - rssi_offset
-    return float('%.2f' % rssi_dbm)
+    return float("%.2f" % rssi_dbm)
 
 
 def battery_pct(battery_level):
     """Calc the battery level to battery pct"""
-    result_pct = float('%.2f' %
-                       ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
+    result_pct = float("%.2f" % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
     if result_pct >= 1.0:
         result_pct = 1.0
     elif result_pct < 0.0:
@@ -704,7 +824,8 @@ def pin_interrupt_callback(topic, message):
     # topic = GPIO17_EXINT, message={'gpio': 18, 'pressure': 0}
     # gpio是对应的gpio号, pressure是电压值
     app_log.info(
-        "pin_interrupt_callback, topic: {}, message: {}".format(topic, message))
+        "pin_interrupt_callback, topic: {}, message: {}".format(topic, message)
+    )
 
 
 def wdt_kick_callback(topic, msg):
@@ -716,10 +837,10 @@ def wdt_feed_callback(topic, msg):
     app_log.info("wdt_feed_callback topic = {} msg = {}".format(topic, msg))
 
 
-PROJECT_NAME = 'QUECPYTHON_600NV2.0'  # 必须要有这行代码才能合并
-PROJECT_VERSION = '1.0.0'  # 必须要有这行代码才能合并
+PROJECT_NAME = "QUECPYTHON_600MV3.0"  # 必须要有这行代码才能合并
+PROJECT_VERSION = "3.0.0"  # 必须要有这行代码才能合并
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     utime.sleep(5)
     # 刷新容器
     guard_context = GuardContext()
@@ -949,13 +1070,15 @@ if __name__ == '__main__':
 
     aliyunClass.ali_start()
     msg_id += 1
-    message = {"topic": aliyunClass.property_publish_topic,
-               "msg": msg_product_info_NetStatus.format(msg_id, net_status[0], net_status[1])}
+    message = {
+        "topic": aliyunClass.property_publish_topic,
+        "msg": msg_product_info_NetStatus.format(msg_id, net_status[0], net_status[1]),
+    }
     Handler.pub(message)
 
     _thread.start_new_thread(get_cell_location, ())
     _thread.start_new_thread(uart2_read, ())
-    # _thread.start_new_thread(light_breath, ())
+    # _thread.start_new_thread(power_restart, ())
 
     while True:
         uart1_read()
