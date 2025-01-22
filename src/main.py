@@ -1,200 +1,377 @@
-# import uos
-# uos.chdir('/usr/')
 from machine import UART
 from machine import I2C
-from misc import PWM
+from machine import Pin
+from umqtt import MQTTClient
 from misc import Power
-from aLiYun import aLiYun
+import dataCall
 import cellLocator
-import sys_bus
 import _thread
 import utime
-from usr.bin.guard import GuardContext
+import log
+import net
+import checkNet
+import sim
+import ustruct
 import ujson
-from machine import Pin, ExtInt
-from usr.bin.third_party.ql_interrupter import WatchDog
 
-# from usr.i2c_aht10 import Aht10Class
-uart2 = UART(UART.UART2, 115200, 8, 0, 1, 0)
-uart1 = UART(UART.UART1, 115200, 8, 0, 1, 0)
-signs_data = {}
+PWM_Led = Pin(Pin.GPIO24, Pin.OUT, Pin.PULL_DISABLE, 1)
+
+PROJECT_NAME = "QuecPython_EC600M"
+PROJECT_VERSION = "3.2.0"
+
+checknet = checkNet.CheckNetwork(PROJECT_NAME, PROJECT_VERSION)
+TaskEnable = True  # 调用disconnect后会通过该状态回收线程资源
 msg_id = 0
-buffer = bytearray(2048)  # 用于存储不完整的数据帧
+state = 0
+mqtt_sub_msg = {}
+signs_data = {}
+
+log.basicConfig(level=log.DEBUG)
+app_log = log.getLogger("app_log")
 
 
-def uart2_write(msg):
-    global uart2
-    uart2.write(msg)
-    app_log.info("uart2_write msg :{}".format(msg))
-
-
-def uart2_read():
-    global uart2, buffer
-
+def watch_dog_task():
     while True:
-        msg_len = uart2.any()
+        if PWM_Led.read():
+            PWM_Led.write(0)
+        else:
+            PWM_Led.write(1)
+        utime.sleep(1)
 
-        if msg_len > 0:
-            app_log.info(msg_len)
-            # start = utime.ticks_ms()
-            msg = uart2.read(msg_len)
+
+class MqttClient:
+    # 说明：reconn该参数用于控制使用或关闭umqtt内部的重连机制，默认为True，使用内部重连机制。
+    # 如需测试或使用外部重连机制可参考此示例代码，测试前需将reconn=False,否则默认会使用内部重连机制！
+    def __init__(
+        self,
+        clientid,
+        server,
+        port,
+        user=None,
+        password=None,
+        keepalive=0,
+        ssl=False,
+        ssl_params={},
+        reconn=True,
+    ):
+        self.__clientid = clientid
+        self.__pw = password
+        self.__server = server
+        self.__port = port
+        self.__uasename = user
+        self.__keepalive = keepalive
+        self.__ssl = ssl
+        self.__ssl_params = ssl_params
+        self.topic = None
+        self.qos = None
+        # 网络状态标志
+        self.__nw_flag = True
+        # 创建互斥锁
+        self.mp_lock = _thread.allocate_lock()
+        # 创建类的时候初始化出mqtt对象
+        self.client = MQTTClient(
+            self.__clientid,
+            self.__server,
+            self.__port,
+            self.__uasename,
+            self.__pw,
+            keepalive=self.__keepalive,
+            ssl=self.__ssl,
+            ssl_params=self.__ssl_params,
+            reconn=reconn,
+        )
+
+    def connect(self):
+        self.client.connect(clean_session=False)
+        # 注册网络回调函数，网络状态发生变化时触发
+        flag = dataCall.setCallback(self.nw_cb)
+        if flag != 0:
+            # 回调注册失败
+            raise Exception("Network callback registration failed")
+
+    def set_callback(self, sub_cb):
+        self.client.set_callback(sub_cb)
+
+    def error_register_cb(self, func):
+        self.client.error_register_cb(func)
+
+    def subscribe(self, topic, qos=0):
+        self.topic = topic  # 保存topic ，多个topic可使用list保存
+        self.qos = qos  # 保存qos
+        self.client.subscribe(topic, qos)
+
+    def publish(self, topic, msg, qos=0):
+        self.client.publish(topic, msg, qos)
+
+    def disconnect(self):
+        global TaskEnable
+        # 关闭wait_msg的监听线程
+        TaskEnable = False
+        # 关闭之前的连接，释放资源
+        self.client.disconnect()
+
+    def reconnect(self):
+        # 判断锁是否已经被获取
+        if self.mp_lock.locked():
+            return
+        self.mp_lock.acquire()
+        # 重新连接前关闭之前的连接，释放资源(注意区别disconnect方法，close只释放socket资源，disconnect包含mqtt线程等资源)
+        self.client.close()
+        # 重新建立mqtt连接
+        while True:
+            net_sta = net.getState()  # 获取网络注册信息
+            if net_sta != -1 and net_sta[1][0] == 1:
+                call_state = dataCall.getInfo(1, 0)  # 获取拨号信息
+                if (call_state != -1) and (call_state[2][0] == 1):
+                    try:
+                        # 网络正常，重新连接mqtt
+                        self.connect()
+                    except Exception as e:
+                        # 重连mqtt失败, 5s继续尝试下一次
+                        self.client.close()
+                        utime.sleep(5)
+                        continue
+                else:
+                    # 网络未恢复，等待恢复
+                    utime.sleep(10)
+                    continue
+                # 重新连接mqtt成功，订阅Topic
+                try:
+                    # 多个topic采用list保存，遍历list重新订阅
+                    if self.topic is not None:
+                        self.client.subscribe(self.topic, self.qos)
+                    self.mp_lock.release()
+                except:
+                    # 订阅失败，重新执行重连逻辑
+                    self.client.close()
+                    utime.sleep(5)
+                    continue
+            else:
+                utime.sleep(5)
+                continue
+            break  # 结束循环
+        # 退出重连
+        return True
+
+    def nw_cb(self, args):
+        nw_sta = args[1]
+        if nw_sta == 1:
+            # 网络连接
+            app_log.info("*** network connected! ***")
+            self.__nw_flag = True
+        else:
+            # 网络断线
+            app_log.info("*** network not connected! ***")
+            self.__nw_flag = False
+
+    def __listen(self):
+        while True:
+            try:
+                if not TaskEnable:
+                    break
+                self.client.wait_msg()
+            except OSError as e:
+                # 判断网络是否断线
+                if not self.__nw_flag:
+                    # 网络断线等待恢复进行重连
+                    self.reconnect()
+                # 在socket状态异常情况下进行重连
+                elif self.client.get_mqttsta() != 0 and TaskEnable:
+                    self.reconnect()
+                else:
+                    # 这里可选择使用raise主动抛出异常或者返回-1
+                    return -1
+
+    def loop_forever(self):
+        _thread.start_new_thread(self.__listen, ())
+
+
+class Uart1(object):
+    def __init__(
+        self,
+        no=UART.UART1,
+        bate=115200,
+        data_bits=8,
+        parity=0,
+        stop_bits=1,
+        flow_control=0,
+    ):
+        self.uart = UART(no, bate, data_bits, parity, stop_bits, flow_control)
+        self.uart.set_callback(self.callback)
+
+    def callback(self, para):
+        app_log.debug("call para:{}".format(para))
+        if 0 == para[0]:
+            self.uartRead(para[2])
+
+    def uartWrite(self, msg):
+        hex_msg = [hex(x) for x in msg]
+        app_log.debug("Write msg:{}".format(hex_msg))
+        self.uart.write(msg)
+
+    def uartRead(self, len):
+        msg = self.uart.read(len)
+        hex_msg = [hex(x) for x in msg]
+        app_log.debug("uart1_read msg: {}".format(hex_msg))
+
+
+class Uart2(object):
+    def __init__(
+        self,
+        no=UART.UART2,
+        bate=115200,
+        data_bits=8,
+        parity=0,
+        stop_bits=1,
+        flow_control=0,
+    ):
+        self.uart = UART(no, bate, data_bits, parity, stop_bits, flow_control)
+        self.uart.set_callback(self.callback)
+        self.buffer = bytearray()  # 初始化缓冲区
+
+    def set_modbus_rtu_instance(self, modbus_rtu_instance):
+        self.modbus_rtu = modbus_rtu_instance
+
+    def callback(self, para):
+        app_log.debug("call para:{}".format(para))
+        if 0 == para[0]:
+            self.uartRead(para[2])
+
+    def uartWrite(self, msg):
+        hex_msg = [hex(x) for x in msg]
+        app_log.debug("Write msg:{}".format(hex_msg))
+        self.uart.write(msg)
+
+    def uartRead(self, len):
+        if len > 0:
+            app_log.debug("len: {}".format(len))
+            msg = self.uart.read(len)
             hex_msg = [hex(x) for x in msg]
             app_log.debug("uart2_read msg: {}".format(hex_msg))
-            buffer += msg  # 追加读取的新数据到缓冲区
-            app_log.debug("all buffer: {}".format(buffer))
+            self.buffer += msg  # 追加读取的新数据到缓冲区
+            app_log.debug("uart2 all buffer: {}".format(self.buffer))
 
             while True:
-                frame_processed = process_buffer()
+                frame_processed = self.process_buffer()
                 if not frame_processed:
                     break
         else:
             utime.sleep_ms(10)
-            continue
 
+    def process_buffer(self):
+        INFO_HEADER_PREFIX = b"\x23\x23"  # 帧头
+        MIN_LENGTH = 9  # 最小帧长度，用于初始条件
 
-def process_buffer():
-    global buffer
-    INFO_HEADER_PREFIX = b"\x23\x23"  # 帧头
-    MIN_LENGTH = 9  # 最小帧长度，用于初始条件
+        app_log.debug("buffer length: {}".format(len(self.buffer)))
+        if len(self.buffer) < 9:
+            return False  # 数据不足以构成任何帧
 
-    app_log.debug("buffer length: {}".format(len(buffer)))
-    if len(buffer) < 9:
-        return False  # 数据不足以构成任何帧
-
-    i = 0
-    while i <= len(buffer) - MIN_LENGTH:
-        # 查找帧头起始，并检查后续字节
-        if buffer[i : i + 2] == INFO_HEADER_PREFIX:
-            process_frame(buffer[i:])
-            buffer_list = list(buffer)
-            buffer_list.clear()
-            buffer = bytearray(buffer_list)  # 重新转换回bytearray
-        elif buffer[i] == 0x0B:
-            # 检查206字节长度的帧
-            if len(buffer) >= i + 6 and buffer[i + 4] == 0xB0:
-                if len(buffer) >= i + 206:
-                    process_frame(buffer[i : i + 206])
-                    buffer_list = list(buffer)
-                    del buffer_list[: i + 206]
-                    buffer = bytearray(buffer_list)  # 重新转换回bytearray
+        i = 0
+        while i <= len(self.buffer) - MIN_LENGTH:
+            if self.buffer[i : i + 2] == INFO_HEADER_PREFIX:
+                self.process_frame(self.buffer[i:])
+                buffer_list = list(self.buffer)
+                buffer_list.clear()
+                self.buffer = bytearray(buffer_list)
+            elif self.buffer[i] == 0x0B:
+                if len(self.buffer) >= i + 6 and self.buffer[i + 4] == 0xB0:
+                    if len(self.buffer) >= i + 206:
+                        self.process_frame(self.buffer[i : i + 206])
+                        buffer_list = list(self.buffer)
+                        del buffer_list[: i + 206]
+                        self.buffer = bytearray(buffer_list)
+                        return True
+                elif len(self.buffer) >= i + 6 and self.buffer[i + 4] == 0xB2:
+                    self.process_frame(self.buffer[i : i + 9])
+                    buffer_list = list(self.buffer)
+                    del buffer_list[: i + 9]
+                    self.buffer = bytearray(buffer_list)
                     return True
-            # 检查9字节长度的帧
-            elif len(buffer) >= i + 6 and buffer[i + 4] == 0xB2:
-                process_frame(buffer[i : i + 9])
-                buffer_list = list(buffer)
-                del buffer_list[: i + 9]
-                buffer = bytearray(buffer_list)  # 重新转换回bytearray
-                return True
-        i += 1
+            i += 1
 
-    # 如果没有匹配到任何帧格式
-    return False
+        return False
 
+    def process_frame(self, frame):
+        global msg_id, signs_data
+        # 根据帧的内容处理帧数据
+        # 这里应该添加帧的具体处理逻辑，可以加入帧类型分辞
+        if frame[0] == 0x0B and frame[4] == 0xB0:
+            hex_msg = [hex(x) for x in frame]
+            signs_data["collector_id"] = hex_to_str(hex_msg[0:4], " ")
+            signs_data["rfid"] = hex_to_str(hex_msg[5:11], " ")
+            signs_data["guid"] = hex_to_str(hex_msg[11:43], " ")
 
-def process_frame(frame):
-    global msg_id
-    # 根据帧的内容处理帧数据
-    # 这里应该添加帧的具体处理逻辑，可以加入帧类型分辞
-    if frame[0] == 0x0B and frame[4] == 0xB0:
-        hex_msg = [hex(x) for x in frame]
-        signs_data["collector_id"] = hex_to_str(hex_msg[0:4], " ")
-        signs_data["rfid"] = hex_to_str(hex_msg[5:11], " ")
-        signs_data["guid"] = hex_to_str(hex_msg[11:43], " ")
+            signs_data["rest_array"] = hex_to_str(hex_msg[43:67], " ")
+            signs_data["ingestion_array"] = hex_to_str(hex_msg[67:91], " ")
+            signs_data["movement_array"] = hex_to_str(hex_msg[91:115], " ")
+            signs_data["climb_array"] = hex_to_str(hex_msg[115:139], " ")
+            signs_data["ruminate_array"] = hex_to_str(hex_msg[139:163], " ")
+            signs_data["other_array"] = hex_to_str(hex_msg[163:187], " ")
 
-        signs_data["rest_array"] = hex_to_str(hex_msg[43:67], " ")
-        signs_data["ingestion_array"] = hex_to_str(hex_msg[67:91], " ")
-        signs_data["movement_array"] = hex_to_str(hex_msg[91:115], " ")
-        signs_data["climb_array"] = hex_to_str(hex_msg[115:139], " ")
-        signs_data["ruminate_array"] = hex_to_str(hex_msg[139:163], " ")
-        signs_data["other_array"] = hex_to_str(hex_msg[163:187], " ")
-
-        signs_data["stage"] = int(hex_msg[187])
-        signs_data["battery_voltage"] = battery_pct(
-            (int(hex_msg[188]) << 8) | int(hex_msg[189])
-        )
-        signs_data["reset_cnt"] = (int(hex_msg[190]) << 8) | int(hex_msg[191])
-        signs_data["signal_strength"] = calc_rssi_dbm(int(hex_msg[192]))
-        signs_data["utc_time"] = int(round(utime.mktime(utime.localtime()) * 1000))
-        app_log.info(signs_data)
-
-        msg_id += 1
-        message = {
-            "topic": aliyunClass.property_publish_topic,
-            "msg": msg_signs_data.format(
-                msg_id,
-                signs_data["collector_id"],
-                signs_data["rfid"],
-                signs_data["guid"],
-                signs_data["rest_array"],
-                signs_data["ingestion_array"],
-                signs_data["movement_array"],
-                signs_data["climb_array"],
-                signs_data["ruminate_array"],
-                signs_data["other_array"],
-                signs_data["stage"],
-                signs_data["battery_voltage"],
-                signs_data["reset_cnt"],
-                signs_data["signal_strength"],
-                signs_data["utc_time"],
-            ),
-        }
-        Handler.pub(message)
-    elif frame[0] == 0x0B and frame[4] == 0xB2:
-        sgm58031_dev.battery_voltage = float(
-            "%.3f" % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11)
-        )
-        app_log.info("battery_voltage = {}".format(sgm58031_dev.battery_voltage))
-
-        sgm58031_dev.voltage = float(
-            "%.3f" % (((frame[7] << 8) | frame[8]) / 32768 * 4.096 * 21)
-        )
-        app_log.info("voltage = {}".format(sgm58031_dev.voltage))
-
-        msg_id += 1
-        message = {
-            "topic": aliyunClass.property_publish_topic,
-            "msg": msg_voltage.format(
-                msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage
-            ),
-        }
-        Handler.pub(message)
-    elif frame[0] == 0x23 and frame[1] == 0x23:
-        msg_id += 1
-        message = {
-            "topic": aliyunClass.property_publish_topic,
-            "msg": msg_product_info_StatusInfo.format(msg_id, buffer),
-        }
-        Handler.pub(message)
-        if "##Read Memory Complete##" in buffer:
-            collector_id = buffer[18:26]
-            app_log.info(collector_id)
-            msg_id += 1
-            message = {
-                "topic": aliyunClass.property_publish_topic,
-                "msg": msg_product_info_CollectorID.format(msg_id, collector_id),
-            }
-            Handler.pub(message)
-
-
-def uart1_read():
-    global uart1, msg_id
-    msg_len = uart1.any()
-    if msg_len:
-        app_log.info("msg_len = {}".format(msg_len))
-        msg = uart1.read(msg_len)
-        app_log.info("uart1_read msg: {}".format(msg))
-        if "$GPRMC" in msg:
-            gprmc_info = parse_gprmc(msg)
-            app_log.info("gprmc_info = {}".format(gprmc_info))
+            signs_data["stage"] = int(hex_msg[187])
+            signs_data["battery_voltage"] = battery_pct(
+                (int(hex_msg[188]) << 8) | int(hex_msg[189])
+            )
+            signs_data["reset_cnt"] = (int(hex_msg[190]) << 8) | int(hex_msg[191])
+            signs_data["signal_strength"] = calc_rssi_dbm(int(hex_msg[192]))
+            signs_data["utc_time"] = int(round(utime.mktime(utime.localtime()) * 1000))
+            app_log.info(signs_data)
 
             msg_id += 1
-            message = {
-                "topic": aliyunClass.property_publish_topic,
-                "msg": msg_geoLocation.format(
-                    msg_id, gprmc_info[0], gprmc_info[1], gprmc_info[2], 1
-                ),
-            }
-            Handler.pub(message)
+            mqtt_client.publish(
+                property_publish_topic.encode("utf-8"),
+                msg_signs_data.format(
+                    msg_id,
+                    signs_data["collector_id"],
+                    signs_data["rfid"],
+                    signs_data["guid"],
+                    signs_data["rest_array"],
+                    signs_data["ingestion_array"],
+                    signs_data["movement_array"],
+                    signs_data["climb_array"],
+                    signs_data["ruminate_array"],
+                    signs_data["other_array"],
+                    signs_data["stage"],
+                    signs_data["battery_voltage"],
+                    signs_data["reset_cnt"],
+                    signs_data["signal_strength"],
+                    signs_data["utc_time"],
+                ).encode("utf-8"),
+            )
+        elif frame[0] == 0x0B and frame[4] == 0xB2:
+            sgm58031_dev.battery_voltage = float(
+                "%.3f" % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11)
+            )
+            app_log.info("battery_voltage = {}".format(sgm58031_dev.battery_voltage))
+
+            sgm58031_dev.voltage = float(
+                "%.3f" % (((frame[7] << 8) | frame[8]) / 32768 * 4.096 * 21)
+            )
+            app_log.info("voltage = {}".format(sgm58031_dev.voltage))
+
+            msg_id += 1
+            mqtt_client.publish(
+                property_publish_topic.encode("utf-8"),
+                msg_voltage.format(
+                    msg_id, sgm58031_dev.battery_voltage, sgm58031_dev.voltage
+                ).encode("utf-8"),
+            )
+        elif frame[0] == 0x23 and frame[1] == 0x23:
+            msg_id += 1
+            mqtt_client.publish(
+                property_publish_topic.encode("utf-8"),
+                msg_product_info_StatusInfo.format(msg_id, self.buffer).encode("utf-8"),
+            )
+            if "##Read Memory Complete##" in self.buffer:
+                collector_id = self.buffer[18:26]
+                app_log.info(collector_id)
+                msg_id += 1
+                mqtt_client.publish(
+                    property_publish_topic.encode("utf-8"),
+                    msg_product_info_CollectorID.format(msg_id, collector_id).encode(
+                        "utf-8"
+                    ),
+                )
 
 
 def hex_to_str(a, b=""):
@@ -209,132 +386,65 @@ def str_to_hex(s):
     return byte_array
 
 
-class SysTopicClass(object):
-    RRPC = "rrpc"
-    OTA = "ota"
-    PUB = "pub"
-    SUB = "sub"
+def parse_loc_val(val, d):
+    v = float(val) / 100
+    v = int(v) + (v - int(v)) * 100 / 60
+    if d == "S" or d == "W":
+        v = v * -1
+    return v
 
 
-class ALiYunClass(object):
-    def __init__(self):
-        ALiYunClass.inst = self
-        # self.ProductKey = "he2maYabo9j"  # 产品标识
-        # self.ProductSecret = '5rcZakY48A2bHhXH'  # 产品密钥（一机一密认证此参数传入None）
-        self.ProductKey = "he2maYabo9j"  # 产品标识
-        self.ProductSecret = (
-            "5rcZakY48A2bHhXH"  # 产品密钥（一机一密认证此参数传入None）
-        )
-        self.DeviceSecret = None  # 设备密钥（一型一密认证此参数传入None）
-        self.DeviceName = "BW-XC-200-035"  # 设备名称
-
-        self.property_subscribe_topic = (
-            "/sys"
-            + "/"
-            + self.ProductKey
-            + "/"
-            + self.DeviceName
-            + "/"
-            + "thing/service/property/set"
-        )
-        self.property_publish_topic = (
-            "/sys"
-            + "/"
-            + self.ProductKey
-            + "/"
-            + self.DeviceName
-            + "/"
-            + "thing/event/property/post"
-        )
-
-        # 创建aliyun连接对象
-        self.ali = aLiYun(
-            self.ProductKey, self.ProductSecret, self.DeviceName, self.DeviceSecret
-        )
-        # 设置mqtt连接属性
-        client_id = self.ProductKey + "." + self.DeviceName  # 自定义字符（不超过64）
-        self.ali.setMqtt(
-            client_id, clean_session=False, keepAlive=60, reconn=True
-        )  # False True
-
-        # 设置回调函数
-        self.ali.setCallback(self.ali_sub_cb)
-
-    def ali_sub_cb(self, topic, msg):  # 回调函数
-        if topic.decode().find(sys_topic.RRPC) != -1:
-            sys_bus.publish(sys_topic.RRPC, {"topic": topic, "msg": msg})
-        elif topic.decode().find(sys_topic.OTA) != -1:
-            sys_bus.publish(sys_topic.OTA, {"topic": topic, "msg": msg})
+def parse_gprmc(data):
+    """
+    b'$GPRMC,111025.00,A,2517.033747,N,11019.176025,E,0.0,144.8,270920,2.3,W,A*2D\r\n'
+    b'$GPRMC,,V,,,,,,,,,,N*53\r\n'
+    b'$GPRMC,024443.0,A,2517.038296,N,11019.174048,E,0.0,,120201,0.0,E,A*2F\r\n'
+    $GPRMC,<1>,<2>,<3>,<4>,<5>,<6>,<7>,<8>,<9>,<10>,<11>,<12>*hh<CR><LF>
+    <1> UTC时间,hhmmss(时分秒)格式
+    <2> 定位状态,A=有效定位,V=无效定位
+    <3> 纬度ddmm.mmmm(度分)格式(前面的0也将被传输)
+    <4> 纬度半球N(北半球)或S(南半球)
+    <5> 经度dddmm.mmmm(度分)格式(前面的0也将被传输)
+    <6> 经度半球E(东经)或W(西经)
+    <7> 地面速率(000.0~999.9节,前面的0也将被传输) 1节=1.852千米(km/h)
+    <8> 地面航向(000.0~359.9度,以真北为参考基准,前面的0也将被传输)
+    <9> UTC日期,ddmmyy(日月年)格式
+    <10> 磁偏角(000.0~180.0度,前面的0也将被传输)
+    <11> 磁偏角方向,E(东)或W(西)
+    <12> 模式指示(仅NMEA0183 3.00版本输出,A=自主定位,D=差分,E=估算,N=数据无效)
+    """
+    li = data.decode().replace("$GPRMC,", "").strip().split(",")
+    lat = log = speed = direct = 0
+    if li[1] == "A":
+        lat = round(parse_loc_val(li[2], li[3]), 6)  # 纬度
+        log = round(parse_loc_val(li[4], li[5]), 6)  # 经度
+        speed = float(li[6]) * 1.852
+        if len(li[7]) > 0:
+            direct = float(li[7])
         else:
-            sys_bus.publish(sys_topic.SUB, {"topic": topic, "msg": msg})
-
-    def ali_start(self):
-        self.ali.start()
-        print("Running")
-
-    def ali_stop(self):
-        self.ali.disconnect()
-
-    def ali_subscribe(self):
-        self.ali.subscribe(self.property_subscribe_topic, qos=0)
-
-    def ali_publish(self, topic, msg):
-        if not self.ali.getAliyunSta():
-            try:
-                self.ali.publish(msg.get("topic"), msg.get("msg"), qos=0)
-            except BaseException:
-                print("send fail!!!")
+            direct = 0
+        # app_log.info('lat:{:.6f},log:{:.6f},speed:{},direct:{}'.format(lat, log, speed, direct))
+    return log, lat, speed, direct
 
 
-class Handler(object):
-    @classmethod
-    def sub(cls, topic, msg):
-        global msg_id
-        print(
-            "Subscribe Recv: Topic={},Msg={}".format(
-                msg.get("topic").decode(), msg.get("msg").decode()
-            )
-        )
-        msg_dict = ujson.loads(msg.get("msg").decode())
-        app_log.info(msg_dict)
-        if "params" in msg_dict.keys():
-            params_dict = msg_dict["params"]
-            if "product_information:SendCommand" in params_dict.keys():
-                app_log.info(params_dict["product_information:SendCommand"])
-                msg_id += 1
-                message = {
-                    "topic": aliyunClass.property_publish_topic,
-                    "msg": msg_product_info_SendCommand.format(
-                        msg_id, params_dict["product_information:SendCommand"]
-                    ),
-                }
-                Handler.pub(message)
-                if params_dict["product_information:SendCommand"] == "reset":
-                    Power.powerRestart()
-                else:
-                    hex_array = str_to_hex(
-                        params_dict["product_information:SendCommand"]
-                    )
-                    uart2_write(hex_array)
+def calc_rssi_dbm(rssi_dec):
+    """Calc the RSSI value to RSSI dBm"""
+    rssi_offset = 74
+    if rssi_dec >= 128:
+        rssi_dbm = (rssi_dec - 256) / 2 - rssi_offset
+    else:
+        rssi_dbm = (rssi_dec / 2) - rssi_offset
+    return float("%.2f" % rssi_dbm)
 
-    @classmethod
-    def pub(cls, msg):
-        sys_bus.publish(sys_topic.PUB, msg)
-        utime.sleep_ms(2000)
 
-    @classmethod
-    def ota(cls, topic, msg):
-        """处理完ota的信息后，同步发送"""
-        msg = {"topic": "xxx", "msg": "xxx"}
-        """同步publish，同步情况下会等待所有topic对应的处理函数处理完才会退出"""
-        sys_bus.publish_sync(sys_topic.PUB, msg)
-
-    @classmethod
-    def rrpc(cls, topic, msg):
-        """发布rrpc执行下列操作"""
-        msg = {"topic": "xxx", "msg": "xxx"}
-        """异步publish， """
-        sys_bus.publish(sys_topic.PUB, msg)
+def battery_pct(battery_level):
+    """Calc the battery level to battery pct"""
+    result_pct = float("%.2f" % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
+    if result_pct >= 1.0:
+        result_pct = 1.0
+    elif result_pct < 0.0:
+        result_pct = 0.0
+    return result_pct
 
 
 class AHT10Class:
@@ -392,13 +502,12 @@ class AHT10Class:
             )
         )
         msg_id += 1
-        message = {
-            "topic": aliyunClass.property_publish_topic,
-            "msg": msg_temperature_humidity.format(
+        mqtt_client.publish(
+            property_publish_topic.encode("utf-8"),
+            msg_temperature_humidity.format(
                 msg_id, self.temperature, self.humidity
-            ),
-        }
-        Handler.pub(message)
+            ).encode("utf-8"),
+        )
 
     def trigger_measurement(self):
         # Trigger data conversion
@@ -665,11 +774,12 @@ class SGM58031Class:
                 app_log.info("voltage = {}".format(self.voltage))
 
             msg_id += 1
-            message = {
-                "topic": aliyunClass.property_publish_topic,
-                "msg": msg_voltage.format(msg_id, self.battery_voltage, self.voltage),
-            }
-            Handler.pub(message)
+            mqtt_client.publish(
+                property_publish_topic.encode("utf-8"),
+                msg_voltage.format(msg_id, self.battery_voltage, self.voltage).encode(
+                    "utf-8"
+                ),
+            )
 
         # -2- Initialise the SGM58031 peripheral
         if self.flip_sign:
@@ -692,199 +802,66 @@ class SGM58031Class:
         )
 
 
-def get_cell_location():
+def cell_location_task():
     global msg_id
     while True:
         utime.sleep(86400)
-        # 1111111122222222  qa6qTK91597826z6
         cell_location = cellLocator.getLocation(
             "www.queclocator.com", 80, "qa6qTK91597826z6", 8, 1
         )
         msg_id += 1
-        message = {
-            "topic": aliyunClass.property_publish_topic,
-            "msg": msg_cellLocator.format(
+        mqtt_client.publish(
+            property_publish_topic.encode("utf-8"),
+            msg_cellLocator.format(
                 msg_id, cell_location[0], cell_location[1], cell_location[2]
-            ),
-        }
-        Handler.pub(message)
+            ).encode("utf-8"),
+        )
 
 
-def get_sim():
+def sim_task():
     global msg_id
-    sim_imsi = net_ser.sim.getImsi()
-    sim_iccid = net_ser.sim.getIccid()
-    msg_id += 1
-    message = {
-        "topic": aliyunClass.property_publish_topic,
-        "msg": msg_sim.format(msg_id, sim_imsi, sim_iccid),
-    }
-    Handler.pub(message)
+    while True:
+        sim_imsi = sim.getImsi()
+        sim_iccid = sim.getIccid()
+        msg_id += 1
+        mqtt_client.publish(
+            property_publish_topic.encode("utf-8"),
+            msg_sim.format(msg_id, sim_imsi, sim_iccid).encode("utf-8"),
+        )
+        utime.sleep(7200)
 
 
 def power_restart():
-    utime.sleep(10)
     while True:
         utime.sleep(14400)
         Power.powerRestart()
 
 
-def parse_loc_val(val, d):
-    v = float(val) / 100
-    v = int(v) + (v - int(v)) * 100 / 60
-    if d == "S" or d == "W":
-        v = v * -1
-    return v
+def mqtt_sub_cb(topic, msg):
+    global state, mqtt_sub_msg
+    app_log.info("Subscribe Recv: Topic={},Msg={}".format(topic.decode(), msg.decode()))
+    mqtt_sub_msg = ujson.loads(msg.decode())
+    state = 1
+    app_log.debug(mqtt_sub_msg["params"])
 
-
-def parse_gprmc(data):
-    """
-    b'$GPRMC,111025.00,A,2517.033747,N,11019.176025,E,0.0,144.8,270920,2.3,W,A*2D\r\n'
-    b'$GPRMC,,V,,,,,,,,,,N*53\r\n'
-    b'$GPRMC,024443.0,A,2517.038296,N,11019.174048,E,0.0,,120201,0.0,E,A*2F\r\n'
-    $GPRMC,<1>,<2>,<3>,<4>,<5>,<6>,<7>,<8>,<9>,<10>,<11>,<12>*hh<CR><LF>
-    <1> UTC时间,hhmmss(时分秒)格式
-    <2> 定位状态,A=有效定位,V=无效定位
-    <3> 纬度ddmm.mmmm（度分）格式（前面的0也将被传输）
-    <4> 纬度半球N（北半球）或S（南半球）
-    <5> 经度dddmm.mmmm（度分）格式（前面的0也将被传输）
-    <6> 经度半球E（东经）或W（西经）
-    <7> 地面速率（000.0~999.9节，前面的0也将被传输） 1节=1.852千米（km/h)
-    <8> 地面航向（000.0~359.9度，以真北为参考基准，前面的0也将被传输）
-    <9> UTC日期，ddmmyy（日月年）格式
-    <10> 磁偏角（000.0~180.0度，前面的0也将被传输）
-    <11> 磁偏角方向，E（东）或W（西）
-    <12> 模式指示（仅NMEA0183 3.00版本输出，A=自主定位，D=差分，E=估算，N=数据无效）
-    """
-    li = data.decode().replace("$GPRMC,", "").strip().split(",")
-    lat = log = speed = direct = 0
-    if li[1] == "A":
-        lat = round(parse_loc_val(li[2], li[3]), 6)  # 纬度
-        log = round(parse_loc_val(li[4], li[5]), 6)  # 经度
-        speed = float(li[6]) * 1.852
-        if len(li[7]) > 0:
-            direct = float(li[7])
-        else:
-            direct = 0
-        # app_log.info('lat:{:.6f},log:{:.6f},speed:{},direct:{}'.format(lat, log, speed, direct))
-    return log, lat, speed, direct
-
-
-def calc_rssi_dbm(rssi_dec):
-    """Calc the RSSI value to RSSI dBm"""
-    rssi_offset = 74
-    if rssi_dec >= 128:
-        rssi_dbm = (rssi_dec - 256) / 2 - rssi_offset
-    else:
-        rssi_dbm = (rssi_dec / 2) - rssi_offset
-    return float("%.2f" % rssi_dbm)
-
-
-def battery_pct(battery_level):
-    """Calc the battery level to battery pct"""
-    result_pct = float("%.2f" % ((2 * (battery_level / 4096) * 3 - 3.0) / (4.2 - 3.0)))
-    if result_pct >= 1.0:
-        result_pct = 1.0
-    elif result_pct < 0.0:
-        result_pct = 0.0
-    return result_pct
-
-
-def light_breath():
-    cycle = 100  # 周期时间
-    high = 1  # 高电平时间
-    flag = 1  # 切换标志位
-    while True:
-        if flag == 1:
-            pwm = PWM(PWM.PWM0, PWM.ABOVE_1US, high, cycle)
-            pwm.open()  # 开启PWM
-            high += 1  # 高电平时间加1
-            utime.sleep_ms(10)  # 延时10ms
-            if high == cycle:
-                flag = 0
-        elif flag == 0:
-            pwm = PWM(PWM.PWM0, PWM.ABOVE_1US, high, cycle)
-            pwm.open()  # 开启PWM
-            high -= 1  # 高电平时间减1
-            utime.sleep_ms(10)
-            if high == 1:
-                flag = 1
-
-
-def log_callback(*args, **kwargs):
-    app_log.debug("log_callback,args:{},kwargs:{}".format(args, kwargs))
-
-
-def net_callback(*args, **kwargs):
-    """网络回调函数"""
-    app_log.debug("net_callback,args:{},kwargs:{}".format(args, kwargs))
-
-
-def pin_interrupt_callback(topic, message):
-    # topic = GPIO17_EXINT, message={'gpio': 18, 'pressure': 0}
-    # gpio是对应的gpio号, pressure是电压值
-    app_log.info(
-        "pin_interrupt_callback, topic: {}, message: {}".format(topic, message)
-    )
-
-
-def wdt_kick_callback(topic, msg):
-    app_log.info("wdt_kick_callback topic = {} msg = {}".format(topic, msg))
-    Power.powerRestart()
-
-
-def wdt_feed_callback(topic, msg):
-    app_log.info("wdt_feed_callback topic = {} msg = {}".format(topic, msg))
-
-
-PROJECT_NAME = "QUECPYTHON_600MV3.0"  # 必须要有这行代码才能合并
-PROJECT_VERSION = "3.0.0"  # 必须要有这行代码才能合并
 
 if __name__ == "__main__":
     utime.sleep(5)
-    # 刷新容器
-    guard_context = GuardContext()
-    guard_context.refresh()
-    # 获取服务
-    net_ser = guard_context.get_server("net")
-    log_ser = guard_context.get_server("log")
-    log_ser.set_level("INFO")
-    # pm_ser = guard_context.get_server("pm")
-    # pm_ser.lock()
-    # pm_ser.count()
-    # # 设置是否自动休眠, 默认是自动休眠, 1是自动休眠0则不是
-    # pm_ser.auto_sleep(1)
-    # 订阅服务
-    net_ser.subscribe(net_callback)
-    log_ser.subscribe(log_callback)
-    # 获取app_log
-    app_log = guard_context.get_logger("app_log")
-    app_log.info("net status: {}".format(net_ser.get_net_status()))
-    net_status = net_ser.wait_connect(5)
+    checknet.poweron_print_once()
+    stagecode, subcode = checknet.wait_network_connected(30)
+    if stagecode == 3 and subcode == 1:
+        app_log.info("Network connection successful!")
 
-    aliyunClass = ALiYunClass()
-    aliyunClass.ali_subscribe()
+        uart1_inst = Uart1()
+        uart2_inst = Uart2()
+        ath10_dev = AHT10Class()
+        sgm58031_dev = SGM58031Class()
+        if not sgm58031_dev.self_verifying():
+            app_log.info("#----sgm58031 initial false~!----#")
 
-    sys_topic = SysTopicClass()
-    sys_bus.subscribe(sys_topic.RRPC, Handler.rrpc)
-    sys_bus.subscribe(sys_topic.OTA, Handler.ota)
-    sys_bus.subscribe(sys_topic.SUB, Handler.sub)
-    sys_bus.subscribe(sys_topic.PUB, aliyunClass.ali_publish)
-    # 订阅gpio的中断
-    sys_bus.subscribe("GPIO17_EXINT", pin_interrupt_callback)
-    # 订阅喂狗后，硬件狗拉GPIO 告知模块喂狗成功
-    sys_bus.subscribe("WDT_KICK_TOPIC", wdt_kick_callback)
-    # 订阅喂狗后的回调
-    sys_bus.subscribe("WDT_KICK_TOPIC_FEED", wdt_feed_callback)
-    watch_dog = WatchDog(Pin.GPIO17, 1, 10000)
-    watch_dog.start()
+        _thread.start_new_thread(watch_dog_task, ())
 
-    ath10_dev = AHT10Class()
-    sgm58031_dev = SGM58031Class()
-    if not sgm58031_dev.self_verifying():
-        print("#----sgm58031 initial false~!----#")
-
-    msg_temperature_humidity = """{{
+        msg_temperature_humidity = """{{
                                 "id": "{0}",
                                 "version": "1.0",
                                 "params": {{
@@ -898,7 +875,7 @@ if __name__ == "__main__":
                                 "method": "thing.event.property.post"
                              }}"""
 
-    msg_voltage = """{{
+        msg_voltage = """{{
                     "id": "{0}",
                     "version": "1.0",
                     "params": {{
@@ -912,7 +889,7 @@ if __name__ == "__main__":
                     "method": "thing.event.property.post"
                  }}"""
 
-    msg_cellLocator = """{{
+        msg_cellLocator = """{{
                     "id": "{0}",
                     "version": "1.0",
                     "params": {{
@@ -931,7 +908,7 @@ if __name__ == "__main__":
                     "method": "thing.event.property.post"
                  }}"""
 
-    msg_sim = """{{
+        msg_sim = """{{
                 "id": "{0}",
                 "version": "1.0",
                 "params": {{
@@ -945,7 +922,7 @@ if __name__ == "__main__":
                 "method": "thing.event.property.post"
              }}"""
 
-    msg_product_info_SendCommand = """{{
+        msg_product_info_SendCommand = """{{
                                     "id": "{0}",
                                     "version": "1.0",
                                     "params": {{
@@ -956,7 +933,7 @@ if __name__ == "__main__":
                                     "method": "thing.event.property.post"
                                  }}"""
 
-    msg_product_info_CollectorID = """{{
+        msg_product_info_CollectorID = """{{
                                     "id": "{0}",
                                     "version": "1.0",
                                     "params": {{
@@ -967,7 +944,7 @@ if __name__ == "__main__":
                                     "method": "thing.event.property.post"
                                  }}"""
 
-    msg_product_info_StatusInfo = """{{
+        msg_product_info_StatusInfo = """{{
                                     "id": "{0}",
                                     "version": "1.0",
                                     "params": {{
@@ -978,7 +955,7 @@ if __name__ == "__main__":
                                     "method": "thing.event.property.post"
                                  }}"""
 
-    msg_product_info_NetStatus = """{{
+        msg_product_info_NetStatus = """{{
                                     "id": "{0}",
                                     "version": "1.0",
                                     "params": {{
@@ -994,7 +971,7 @@ if __name__ == "__main__":
                                     "method": "thing.event.property.post"
                                  }}"""
 
-    msg_geoLocation = """{{
+        msg_geoLocation = """{{
                             "id": "{0}",
                             "version": "1.0",
                             "params": {{
@@ -1016,7 +993,7 @@ if __name__ == "__main__":
                             "method": "thing.event.property.post"
                          }}"""
 
-    msg_signs_data = """{{
+        msg_signs_data = """{{
                             "id": "{0}",
                             "version": "1.0",
                             "params": {{
@@ -1068,21 +1045,81 @@ if __name__ == "__main__":
                             "method": "thing.event.property.post"
                          }}"""
 
-    aliyunClass.ali_start()
-    msg_id += 1
-    message = {
-        "topic": aliyunClass.property_publish_topic,
-        "msg": msg_product_info_NetStatus.format(msg_id, net_status[0], net_status[1]),
-    }
-    Handler.pub(message)
+        ProductKey = "he2maYabo9j"  # 产品标识
+        DeviceName = "BW-XC-200-036"  # 设备名称
+        # DeviceName = "QH-D200-485-006"  # 设备名称
+        # DeviceName = "QH-D200-485-007"  # 设备名称
+        # DeviceName = "QH-D200-485-008"  # 设备名称
 
-    _thread.start_new_thread(get_cell_location, ())
-    _thread.start_new_thread(uart2_read, ())
-    # _thread.start_new_thread(power_restart, ())
+        property_subscribe_topic = (
+            "/sys"
+            + "/"
+            + ProductKey
+            + "/"
+            + DeviceName
+            + "/"
+            + "thing/service/property/set"
+        )
+        property_publish_topic = (
+            "/sys"
+            + "/"
+            + ProductKey
+            + "/"
+            + DeviceName
+            + "/"
+            + "thing/event/property/post"
+        )
 
-    while True:
-        uart1_read()
-        ath10_dev.trigger_measurement()
-        sgm58031_dev.measure_adc_value()
-        get_sim()
-        utime.sleep(1200)
+        # 创建一个mqtt实例
+        mqtt_client = MqttClient(
+            clientid="he2maYabo9j.BW-XC-200-036|securemode=2,signmethod=hmacsha256,timestamp=1737515423690|",
+            server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+            port=1883,
+            user="BW-XC-200-036&he2maYabo9j",
+            password="b9fbb068f1c63eb6e5b23cfa919400114ceecbb5a490e54bab160c9050e8a378",
+            keepalive=60,
+            reconn=True,
+        )
+
+        def mqtt_err_cb(err):
+            app_log.error("thread err:%s" % err)
+            mqtt_client.reconnect()  # 可根据异常进行重连
+
+        # 设置消息回调
+        mqtt_client.set_callback(mqtt_sub_cb)
+        mqtt_client.error_register_cb(mqtt_err_cb)
+        # 建立连接
+        try:
+            mqtt_client.connect()
+        except Exception as e:
+            app_log.error("e=%s" % e)
+
+        # 订阅主题
+        app_log.info(
+            "Connected to aliyun, subscribed to: {}".format(property_subscribe_topic)
+        )
+        mqtt_client.subscribe(property_subscribe_topic.encode("utf-8"), qos=0)
+
+        msg_id += 1
+        mqtt_client.publish(
+            property_publish_topic.encode("utf-8"),
+            msg_product_info_NetStatus.format(msg_id, stagecode, subcode).encode(
+                "utf-8"
+            ),
+        )
+
+        mqtt_client.loop_forever()
+
+        _thread.start_new_thread(cell_location_task, ())
+        _thread.start_new_thread(sim_task, ())
+
+        while True:
+            ath10_dev.trigger_measurement()
+            sgm58031_dev.measure_adc_value()
+            utime.sleep(1200)
+    else:
+        app_log.error(
+            "Network connection failed! stagecode = {}, subcode = {}".format(
+                stagecode, subcode
+            )
+        )
