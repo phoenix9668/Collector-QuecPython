@@ -1,0 +1,792 @@
+>>> 
+==================================================
+PROJECT_NAME     : QuecPython_EC200U_EU
+PROJECT_VERSION  : 3.2.2
+FIRMWARE_VERSION : EC200UEUAAR03A04M08_OCPU_QPY_BETA0418
+POWERON_REASON   : 2
+SIM_CARD_STATUS  : 1
+==================================================
+INFO:app_log:Network connection successful!
+INFO:app_log:Connected to aliyun, subscribed to: /sys/k2a2jDf1SSW/BW-XC-200-EU-002/thing/service/property/set
+INFO:app_log:Network connection good!
+INFO:app_log:Network connection good!
+==================================================
+PROJECT_NAME     : QuecPython_EC200U_EU
+PROJECT_VERSION  : 3.2.2
+FIRMWARE_VERSION : EC200UEUAAR03A04M08_OCPU_QPY_BETA0418
+POWERON_REASON   : 2
+SIM_CARD_STATUS  : 1
+==================================================
+INFO:app_log:Network connection successful!
+INFO:app_log:Connected to aliyun, subscribed to: /sys/k2a2jDf1SSW/BW-XC-200-EU-002/thing/service/property/set
+WARN:MQTT:[2025-4-19 23:45:10] wait msg OSError[[Errno 103] ECONNABORTED] . Trying to reconnect
+INFO:MQTT:[2025-4-19 23:45:12] The network condition has been restored and an attempt will be made to reconnect
+WARN:MQTT:[2025-4-19 23:45:14] The connection attempt failed [MQTT Connect error='DNS Parsing NULL' FAIL] and will be tried again after 6 seconds.
+INFO:MQTT:LTE Net unregistered.
+INFO:MQTT:[2025-4-19 23:45:20] The network condition has been restored and an attempt will be made to reconnect
+INFO:MQTT:[2025-4-19 23:45:20] Reconnection successful!
+WARN:MQTT:[2025-4-19 23:45:27] wait msg OSError[[Errno 103] ECONNABORTED] . Trying to reconnect
+INFO:MQTT:[2025-4-19 23:45:28] The network condition has been restored and an attempt will be made to reconnect
+WARN:MQTT:[2025-4-19 23:45:30] The connection attempt failed [MQTT Connect error='DNS Parsing NULL' FAIL] and will be tried again after 6 seconds.
+INFO:MQTT:LTE Net unregistered.
+INFO:MQTT:[2025-4-19 23:45:36] The network condition has been restored and an attempt will be made to reconnect
+INFO:MQTT:[2025-4-19 23:45:36] Reconnection successful!
+WARN:MQTT:[2025-4-19 23:45:43] wait msg OSError[[Errno 103] ECONNABORTED] . Trying to reconnect
+INFO:MQTT:[2025-4-19 23:45:44] The network condition has been restored and an attempt will be made to reconnect
+WARN:MQTT:[2025-4-19 23:45:46] The connection attempt failed [MQTT Connect error='DNS Parsing NULL' FAIL] and will be tried again after 6 seconds.
+INFO:MQTT:LTE Net unregistered.
+INFO:MQTT:[2025-4-19 23:45:52] The network condition has been restored and an attempt will be made to reconnect
+INFO:MQTT:[2025-4-19 23:45:52] Reconnection successful!
+WARN:MQTT:[2025-4-19 23:46:0] wait msg OSError[[Errno 103] ECONNABORTED] . Trying to reconnect
+INFO:MQTT:[2025-4-19 23:46:1] The network condition has been restored and an attempt will be made to reconnect
+WARN:MQTT:[2025-4-19 23:46:4] The connection attempt failed [MQTT Connect error='DNS Parsing NULL' FAIL] and will be tried again after 6 seconds.
+INFO:MQTT:LTE Net unregistered.
+INFO:MQTT:[2025-4-19 23:46:10] The network condition has been restored and an attempt will be made to reconnect
+INFO:app_log:Network connection good!
+WARN:MQTT:Error send mqtt_dis FAIL.
+[ERROR] connect failed. Error : MQTT Connect error='DNS Parsing NULL' FAIL
+ERROR:app_log:aLiYun recovery failed: 'NoneType' object has no attribute 'write'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+WARN:MQTT:Publish Fail OSError['NoneType' object has no attribute 'write'].
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+WARN:MQTT:Publish Fail OSError['NoneType' object has no attribute 'write'].
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+WARN:MQTT:Publish Fail OSError['NoneType' object has no attribute 'write'].
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+WARN:MQTT:Publish Fail OSError['NoneType' object has no attribute 'write'].
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'
+INFO:app_log:Network connection good!
+ERROR:app_log:Check network task error: 'NoneType' object has no attribute 'getsocketsta'1xdxs

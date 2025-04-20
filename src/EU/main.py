@@ -14,9 +14,9 @@ import sim
 import ustruct
 import ujson
 
-PWM_Led = Pin(Pin.GPIO24, Pin.OUT, Pin.PULL_DISABLE, 1)
+PWM_Led = Pin(Pin.GPIO28, Pin.OUT, Pin.PULL_DISABLE, 1)
 
-PROJECT_NAME = "QuecPython_EC600M"
+PROJECT_NAME = "QuecPython_EC200U_EU"
 PROJECT_VERSION = "3.2.0"
 
 checknet = checkNet.CheckNetwork(PROJECT_NAME, PROJECT_VERSION)
@@ -273,7 +273,7 @@ class Uart2(object):
                 buffer_list = list(self.buffer)
                 buffer_list.clear()
                 self.buffer = bytearray(buffer_list)
-            elif self.buffer[i] == 0x0B:
+            elif self.buffer[i] == 0x0E:
                 if len(self.buffer) >= i + 6 and self.buffer[i + 4] == 0xB0:
                     if len(self.buffer) >= i + 206:
                         self.process_frame(self.buffer[i : i + 206])
@@ -295,7 +295,7 @@ class Uart2(object):
         global msg_id, signs_data
         # 根据帧的内容处理帧数据
         # 这里应该添加帧的具体处理逻辑，可以加入帧类型分辞
-        if frame[0] == 0x0B and frame[4] == 0xB0:
+        if frame[0] == 0x0E and frame[4] == 0xB0:
             hex_msg = [hex(x) for x in frame]
             signs_data["collector_id"] = hex_to_str(hex_msg[0:4], " ")
             signs_data["rfid"] = hex_to_str(hex_msg[5:11], " ")
@@ -338,7 +338,7 @@ class Uart2(object):
                     signs_data["utc_time"],
                 ).encode("utf-8"),
             )
-        elif frame[0] == 0x0B and frame[4] == 0xB2:
+        elif frame[0] == 0x0E and frame[4] == 0xB2:
             sgm58031_dev.battery_voltage = float(
                 "%.3f" % (((frame[5] << 8) | frame[6]) / 32768 * 4.096 * 11)
             )
@@ -457,7 +457,7 @@ class AHT10Class:
         self.AHT10_START_MEASURMENT_CMD = 0xAC
         # Reset
         self.AHT10_RESET_CMD = 0xBA
-        self.i2c_dev = I2C(I2C.I2C1, I2C.STANDARD_MODE)  # Return I2C object
+        self.i2c_dev = I2C(I2C.I2C0, I2C.STANDARD_MODE)  # Return I2C object
         self.i2c_addr = addr
         self.humidity = None
         self.temperature = None
@@ -527,7 +527,7 @@ class SGM58031Class:
 
     def __init__(self, addr=0x48, alise="SGM58031"):
         # Initialization command
-        self.i2c_dev = I2C(I2C.I2C1, I2C.STANDARD_MODE)  # Return I2C object
+        self.i2c_dev = I2C(I2C.I2C0, I2C.STANDARD_MODE)  # Return I2C object
         self.i2c_addr = addr
 
         self.register_map = {
@@ -854,7 +854,7 @@ if __name__ == "__main__":
 
         uart1_inst = Uart1()
         uart2_inst = Uart2()
-        ath10_dev = AHT10Class()
+        # ath10_dev = AHT10Class()
         sgm58031_dev = SGM58031Class()
         if not sgm58031_dev.self_verifying():
             app_log.info("#----sgm58031 initial false~!----#")
@@ -1046,13 +1046,7 @@ if __name__ == "__main__":
                          }}"""
 
         ProductKey = "he2maYabo9j"  # 产品标识
-        # DeviceName = "BW-XC-200-031"  # 设备名称
-        # DeviceName = "BW-XC-200-035"  # 设备名称
-        # DeviceName = "BW-XC-200-036"  # 设备名称
-        # DeviceName = "BW-XC-200-037"  # 设备名称
-        # DeviceName = "BW-XC-200-038"  # 设备名称
-        # DeviceName = "BW-XC-200-039"  # 设备名称
-        DeviceName = "BW-XC-200-040"  # 设备名称
+        DeviceName = "BW-XC-200-EU-001"  # 设备名称
 
         property_subscribe_topic = (
             "/sys"
@@ -1075,65 +1069,21 @@ if __name__ == "__main__":
 
         # 创建一个mqtt实例
         # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-031|securemode=2,signmethod=hmacsha256,timestamp=1740711365522|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     clientid="k2a2jDf1SSW.BW-XC-200-EU-001|securemode=2,signmethod=hmacsha256,timestamp=1742180243562|",
+        #     server="iot-31z00i0fhc1e85a.mqtt.iothub.aliyuncs.com",
         #     port=1883,
-        #     user="BW-XC-200-031&he2maYabo9j",
-        #     password="e355deead7e10e5975599037af7fdeaacc8312d7c4a1cfa366e851a6a46c6fa2",
+        #     user="BW-XC-200-EU-001&k2a2jDf1SSW",
+        #     password="f5a3bb150b501f7162246d51a118e408e92aaf9201468a2f00a58a860c091a8a",
         #     keepalive=60,
-        #     reconn=True,
+        #     reconn=False,
         # )
-        # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-035|securemode=2,signmethod=hmacsha256,timestamp=1740710752797|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-        #     port=1883,
-        #     user="BW-XC-200-035&he2maYabo9j",
-        #     password="8a3bf4d7f4ff13050f936ea4d92f19217c8644da25e78bc4baab46a84944ac53",
-        #     keepalive=60,
-        #     reconn=True,
-        # )
-        # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-036|securemode=2,signmethod=hmacsha256,timestamp=1737515423690|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-        #     port=1883,
-        #     user="BW-XC-200-036&he2maYabo9j",
-        #     password="b9fbb068f1c63eb6e5b23cfa919400114ceecbb5a490e54bab160c9050e8a378",
-        #     keepalive=60,
-        #     reconn=True,
-        # )
-        # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-037|securemode=2,signmethod=hmacsha256,timestamp=1742545510325|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-        #     port=1883,
-        #     user="BW-XC-200-037&he2maYabo9j",
-        #     password="e426535bc776dfd74f44d413d2d1f156b71217be22e301603b202434f1ce5cc7",
-        #     keepalive=60,
-        #     reconn=True,
-        # )
-        # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-038|securemode=2,signmethod=hmacsha256,timestamp=1742547056919|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-        #     port=1883,
-        #     user="BW-XC-200-038&he2maYabo9j",
-        #     password="6895739616d39616d9b67dab084f9b99465da8dcd3c52d970cdd536b470a676f",
-        #     keepalive=60,
-        #     reconn=True,
-        # )
-        # mqtt_client = MqttClient(
-        #     clientid="he2maYabo9j.BW-XC-200-039|securemode=2,signmethod=hmacsha256,timestamp=1742547740546|",
-        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-        #     port=1883,
-        #     user="BW-XC-200-039&he2maYabo9j",
-        #     password="eebef77f9ea055c668aefb3a98f3e5bd2204b7a85635884d61da8249123ebb6b",
-        #     keepalive=60,
-        #     reconn=True,
-        # )
+
         mqtt_client = MqttClient(
-            clientid="he2maYabo9j.BW-XC-200-040|securemode=2,signmethod=hmacsha256,timestamp=1742779038209|",
+            clientid="he2maYabo9j.BW-XC-200-EU-001|securemode=2,signmethod=hmacsha256,timestamp=1744342822986|",
             server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
             port=1883,
-            user="BW-XC-200-040&he2maYabo9j",
-            password="b5de9d3cfb7dc9fc9ccfba1ba6a0945c9a54c4e543842f13e477d4b633147441",
+            user="BW-XC-200-EU-001&he2maYabo9j",
+            password="4f172447e1c18c4405bcde45d9513d3da7a75e5040e8deb339135d7d305ab2e1",
             keepalive=60,
             reconn=True,
         )
@@ -1171,7 +1121,7 @@ if __name__ == "__main__":
         _thread.start_new_thread(sim_task, ())
 
         while True:
-            ath10_dev.trigger_measurement()
+            # ath10_dev.trigger_measurement()
             sgm58031_dev.measure_adc_value()
             utime.sleep(1200)
     else:
