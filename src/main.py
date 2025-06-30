@@ -1052,7 +1052,11 @@ if __name__ == "__main__":
         # DeviceName = "BW-XC-200-037"  # 设备名称
         # DeviceName = "BW-XC-200-038"  # 设备名称
         # DeviceName = "BW-XC-200-039"  # 设备名称
-        DeviceName = "BW-XC-200-040"  # 设备名称
+        # DeviceName = "BW-XC-200-040"  # 设备名称
+        # DeviceName = "BW-XC-200-041"  # 设备名称
+        # DeviceName = "BW-XC-200-042"  # 设备名称
+        # DeviceName = "BW-XC-200-043"  # 设备名称
+        DeviceName = "BW-XC-200-044"  # 设备名称
 
         property_subscribe_topic = (
             "/sys"
@@ -1128,12 +1132,48 @@ if __name__ == "__main__":
         #     keepalive=60,
         #     reconn=True,
         # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-040|securemode=2,signmethod=hmacsha256,timestamp=1742779038209|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-040&he2maYabo9j",
+        #     password="b5de9d3cfb7dc9fc9ccfba1ba6a0945c9a54c4e543842f13e477d4b633147441",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-041|securemode=2,signmethod=hmacsha256,timestamp=1749190234892|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-041&he2maYabo9j",
+        #     password="7c164bda02b7a6e933a0fa8c85c68c4717220ce72531cf40a39aee6945dcd6ee",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-042|securemode=2,signmethod=hmacsha256,timestamp=1749190747016|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-042&he2maYabo9j",
+        #     password="bd758d20066862b6c3dc653186d3f83ee3fb58dd9c7872c503d813db694311b1",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-043|securemode=2,signmethod=hmacsha256,timestamp=1749190823445|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-043&he2maYabo9j",
+        #     password="dc7dbecaa6661e71ba9fc4db98715b192f278c68c70541e8f3c3d9458e75a85a",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
         mqtt_client = MqttClient(
-            clientid="he2maYabo9j.BW-XC-200-040|securemode=2,signmethod=hmacsha256,timestamp=1742779038209|",
+            clientid="he2maYabo9j.BW-XC-200-044|securemode=2,signmethod=hmacsha256,timestamp=1749190917999|",
             server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
             port=1883,
-            user="BW-XC-200-040&he2maYabo9j",
-            password="b5de9d3cfb7dc9fc9ccfba1ba6a0945c9a54c4e543842f13e477d4b633147441",
+            user="BW-XC-200-044&he2maYabo9j",
+            password="e25bdd8f1e614d92d3c7916abe33aba9d4a031f80d740edf9699346e0a7734f8",
             keepalive=60,
             reconn=True,
         )

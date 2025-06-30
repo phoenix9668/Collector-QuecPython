@@ -39,10 +39,10 @@ ProductKey = "he2maYabo9j"  # 产品标识
 ProductSecret = (
     None  # 产品密钥（使用一机一密认证时此参数传入None，参照阿里 IoT 平台应用开发指导)
 )
-DeviceName = "BW-XC-200-EU-001"  # 设备名称
-DeviceSecret = "1ef1e7b1db82814363c4aa1cf01faee3"
-# DeviceName = "BW-XC-200-EU-002"  # 设备名称
-# DeviceSecret = "081223b7baaabd327d2ab274d84ea35f"
+# DeviceName = "BW-XC-200-EU-001"  # 设备名称
+# DeviceSecret = "1ef1e7b1db82814363c4aa1cf01faee3"
+DeviceName = "BW-XC-200-EU-002"  # 设备名称
+DeviceSecret = "081223b7baaabd327d2ab274d84ea35f"
 MqttServer = "iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com"
 
 # ProductKey = "k2a2jDf1SSW"  # 产品标识
