@@ -837,12 +837,94 @@ def power_restart():
         Power.powerRestart()
 
 
+def chect_net_task():
+    global msg_id, mqtt_client
+    while True:
+        try:
+            utime.sleep(60)
+            stagecode, subcode = checknet.wait_network_connected(30)
+            if stagecode == 3 and subcode == 1:
+                app_log.info("Network connection good!")
+                app_log.info("mqtt_client = {}".format(mqtt_client))
+                # 先检查 mqtt_client 对象是否有效
+                if mqtt_client is None:
+                    # 重新创建 ali 对象
+                    mqtt_client = MqttClient(
+                        clientid="he2maYabo9j.BW-XC-200-044|securemode=2,signmethod=hmacsha256,timestamp=1749190917999|",
+                        server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+                        port=1883,
+                        user="BW-XC-200-044&he2maYabo9j",
+                        password="e25bdd8f1e614d92d3c7916abe33aba9d4a031f80d740edf9699346e0a7734f8",
+                        keepalive=60,
+                        reconn=True,
+                    )
+
+                if mqtt_client.client.get_mqttsta() != 0:
+                    # 重置MQTT连接
+                    try:
+                        # 设置消息回调
+                        mqtt_client.set_callback(mqtt_sub_cb)
+                        mqtt_client.error_register_cb(mqtt_err_cb)
+                        # 建立连接
+                        try:
+                            mqtt_client.connect()
+                        except Exception as e:
+                            app_log.error("e=%s" % e)
+                        # 订阅主题
+                        app_log.info(
+                            "Connected to aliyun, subscribed to: {}".format(
+                                property_subscribe_topic
+                            )
+                        )
+                        mqtt_client.subscribe(
+                            property_subscribe_topic.encode("utf-8"), qos=0
+                        )
+                        utime.sleep(5)
+
+                        # 发送网络状态
+                        msg_id += 1
+                        mqtt_client.publish(
+                            property_publish_topic.encode("utf-8"),
+                            msg_product_info_NetStatus.format(
+                                msg_id, stagecode, subcode
+                            ).encode("utf-8"),
+                        )
+
+                        mqtt_client.loop_forever()
+                        app_log.info("aLiYun recovery successful")
+                    except Exception as e:
+                        app_log.error("aLiYun recovery failed: {}".format(e))
+                        utime.sleep(30)  # 失败后等待较长时间再重试
+                continue  # 网络正常，直接开始下一次检查
+
+            # 网络异常，开始恢复流程
+            app_log.error(
+                "Network connection failed, stage={}, state={}".format(
+                    stagecode, subcode
+                )
+            )
+
+            # 重置网络
+            net.setModemFun(0)  # 关闭网络
+            utime.sleep(5)
+            net.setModemFun(1)  # 打开网络
+            utime.sleep(5)
+        except Exception as e:
+            app_log.error("Check network task error: {}".format(e))
+            utime.sleep(30)  # 失败后等待较长时间再重试
+
+
 def mqtt_sub_cb(topic, msg):
     global state, mqtt_sub_msg
     app_log.info("Subscribe Recv: Topic={},Msg={}".format(topic.decode(), msg.decode()))
     mqtt_sub_msg = ujson.loads(msg.decode())
     state = 1
     app_log.debug(mqtt_sub_msg["params"])
+
+
+def mqtt_err_cb(err):
+    app_log.error("thread err:%s" % err)
+    mqtt_client.reconnect()  # 可根据异常进行重连
 
 
 if __name__ == "__main__":
@@ -1178,10 +1260,6 @@ if __name__ == "__main__":
             reconn=True,
         )
 
-        def mqtt_err_cb(err):
-            app_log.error("thread err:%s" % err)
-            mqtt_client.reconnect()  # 可根据异常进行重连
-
         # 设置消息回调
         mqtt_client.set_callback(mqtt_sub_cb)
         mqtt_client.error_register_cb(mqtt_err_cb)
@@ -1209,6 +1287,7 @@ if __name__ == "__main__":
 
         _thread.start_new_thread(cell_location_task, ())
         _thread.start_new_thread(sim_task, ())
+        _thread.start_new_thread(chect_net_task, ())
 
         while True:
             ath10_dev.trigger_measurement()
