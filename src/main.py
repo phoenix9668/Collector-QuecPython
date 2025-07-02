@@ -837,6 +837,20 @@ def power_restart():
         Power.powerRestart()
 
 
+def send_heartbeat():
+    while True:
+        utime.sleep(300)  # 5分钟发送一次心跳包
+        # 检查网络状态
+        stagecode, subcode = checknet.wait_network_connected(30)
+        if stagecode == 3 and subcode == 1:
+            # 网络正常，发送心跳包
+            uart2_inst.uartWrite(b"Heartbeat")
+        else:
+            # 网络不正常，不发送心跳包
+            app_log.info("Network not connected, skipping heartbeat")
+        # 等待一段时间后再次发送心跳包
+
+
 def chect_net_task():
     global msg_id, mqtt_client
     while True:
@@ -1288,6 +1302,7 @@ if __name__ == "__main__":
         _thread.start_new_thread(cell_location_task, ())
         _thread.start_new_thread(sim_task, ())
         _thread.start_new_thread(chect_net_task, ())
+        _thread.start_new_thread(send_heartbeat, ())
 
         while True:
             ath10_dev.trigger_measurement()

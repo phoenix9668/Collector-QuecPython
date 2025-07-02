@@ -516,7 +516,7 @@ def chect_net_task():
                     # 重新创建 ali 对象
                     ali = aLiYun(
                         ProductKey, ProductSecret, DeviceName, DeviceSecret, MqttServer
-                    )
+                    )  
 
                 mqtt_state = ali.getAliyunSta()
                 if mqtt_state == -1:
