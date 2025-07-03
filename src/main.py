@@ -839,7 +839,7 @@ def power_restart():
 
 def send_heartbeat():
     while True:
-        utime.sleep(300)  # 5分钟发送一次心跳包
+        utime.sleep(120)  # 2分钟发送一次心跳包
         # 检查网络状态
         stagecode, subcode = checknet.wait_network_connected(30)
         if stagecode == 3 and subcode == 1:
