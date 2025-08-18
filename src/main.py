@@ -17,7 +17,7 @@ import ujson
 PWM_Led = Pin(Pin.GPIO24, Pin.OUT, Pin.PULL_DISABLE, 1)
 
 PROJECT_NAME = "QuecPython_EC600M"
-PROJECT_VERSION = "3.2.0"
+PROJECT_VERSION = "3.2.2"
 
 checknet = checkNet.CheckNetwork(PROJECT_NAME, PROJECT_VERSION)
 TaskEnable = True  # 调用disconnect后会通过该状态回收线程资源
@@ -864,11 +864,11 @@ def chect_net_task():
                 if mqtt_client is None:
                     # 重新创建 ali 对象
                     mqtt_client = MqttClient(
-                        clientid="he2maYabo9j.BW-XC-200-044|securemode=2,signmethod=hmacsha256,timestamp=1749190917999|",
+                        clientid="he2maYabo9j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755002046879|",
                         server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
                         port=1883,
-                        user="BW-XC-200-044&he2maYabo9j",
-                        password="e25bdd8f1e614d92d3c7916abe33aba9d4a031f80d740edf9699346e0a7734f8",
+                        user="BW-XC-200-029&he2maYabo9j",
+                        password="9b1fbaa59663cd4c36653ddb3e49955f11e7b4cae554681d901524c88091fa74",
                         keepalive=60,
                         reconn=True,
                     )
@@ -1142,6 +1142,8 @@ if __name__ == "__main__":
                          }}"""
 
         ProductKey = "he2maYabo9j"  # 产品标识
+        # DeviceName = "BW-XC-200-020"  # 设备名称
+        DeviceName = "BW-XC-200-029"  # 设备名称
         # DeviceName = "BW-XC-200-031"  # 设备名称
         # DeviceName = "BW-XC-200-035"  # 设备名称
         # DeviceName = "BW-XC-200-036"  # 设备名称
@@ -1152,7 +1154,7 @@ if __name__ == "__main__":
         # DeviceName = "BW-XC-200-041"  # 设备名称
         # DeviceName = "BW-XC-200-042"  # 设备名称
         # DeviceName = "BW-XC-200-043"  # 设备名称
-        DeviceName = "BW-XC-200-044"  # 设备名称
+        # DeviceName = "BW-XC-200-044"  # 设备名称
 
         property_subscribe_topic = (
             "/sys"
@@ -1174,6 +1176,24 @@ if __name__ == "__main__":
         )
 
         # 创建一个mqtt实例
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-020|securemode=2,signmethod=hmacsha256,timestamp=1753170365331|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-020&he2maYabo9j",
+        #     password="3146def615789d58756bd8dafaef9f4a4b62c5a21263e359700e3cf98da1a65b",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        mqtt_client = MqttClient(
+            clientid="he2maYabo9j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755002046879|",
+            server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+            port=1883,
+            user="BW-XC-200-029&he2maYabo9j",
+            password="9b1fbaa59663cd4c36653ddb3e49955f11e7b4cae554681d901524c88091fa74",
+            keepalive=60,
+            reconn=True,
+        )
         # mqtt_client = MqttClient(
         #     clientid="he2maYabo9j.BW-XC-200-031|securemode=2,signmethod=hmacsha256,timestamp=1740711365522|",
         #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
@@ -1264,15 +1284,15 @@ if __name__ == "__main__":
         #     keepalive=60,
         #     reconn=True,
         # )
-        mqtt_client = MqttClient(
-            clientid="he2maYabo9j.BW-XC-200-044|securemode=2,signmethod=hmacsha256,timestamp=1749190917999|",
-            server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-            port=1883,
-            user="BW-XC-200-044&he2maYabo9j",
-            password="e25bdd8f1e614d92d3c7916abe33aba9d4a031f80d740edf9699346e0a7734f8",
-            keepalive=60,
-            reconn=True,
-        )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-044|securemode=2,signmethod=hmacsha256,timestamp=1749190917999|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-044&he2maYabo9j",
+        #     password="e25bdd8f1e614d92d3c7916abe33aba9d4a031f80d740edf9699346e0a7734f8",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
 
         # 设置消息回调
         mqtt_client.set_callback(mqtt_sub_cb)
@@ -1314,3 +1334,4 @@ if __name__ == "__main__":
                 stagecode, subcode
             )
         )
+        Power.powerRestart()

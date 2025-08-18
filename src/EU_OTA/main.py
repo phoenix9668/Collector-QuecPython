@@ -1,5 +1,6 @@
 import modem
 from machine import UART
+from machine import I2C
 from machine import Pin
 from machine import WDT
 from machine import Timer
@@ -21,7 +22,7 @@ timer = Timer(Timer.Timer1)
 PROJECT_NAME = "QuecPython_EC200U_EUAA"
 PROJECT_VERSION = "3.6.6"
 # 用户需要配置的APN信息，根据实际情况修改
-usrConfig = {"apn": "ctm-mobile", "username": "", "password": ""}  # KT
+# usrConfig = {"apn": "ctm-mobile", "username": "", "password": ""}  # KT
 # usrConfig = {"apn": "smgftyz.grevpdn.zj", "username": "", "password": ""}  # 电信卡
 # usrConfig = {'apn': 'shqnxx04.shm2mapn', 'username': '', 'password': ''}  # 联通卡
 
@@ -39,10 +40,12 @@ ProductKey = "he2maYabo9j"  # 产品标识
 ProductSecret = (
     None  # 产品密钥（使用一机一密认证时此参数传入None，参照阿里 IoT 平台应用开发指导)
 )
-DeviceName = "BW-XC-200-EU-001"  # 设备名称
-DeviceSecret = "1ef1e7b1db82814363c4aa1cf01faee3"
+# DeviceName = "BW-XC-200-EU-001"  # 设备名称
+# DeviceSecret = "1ef1e7b1db82814363c4aa1cf01faee3"
 # DeviceName = "BW-XC-200-EU-002"  # 设备名称
 # DeviceSecret = "081223b7baaabd327d2ab274d84ea35f"
+DeviceName = "BW-XC-200-EU-003"  # 设备名称
+DeviceSecret = "ad28f59dd9e3044c3d739ed1819cd727"
 MqttServer = "iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com"
 
 # ProductKey = "k2a2jDf1SSW"  # 产品标识
@@ -255,6 +258,286 @@ def watch_dog_task():
         else:
             PWM_Led.write(1)
         utime.sleep(1)
+
+
+class SGM58031Class:
+    """SGM58031 class, incloud read and write function"""
+
+    def __init__(self, addr=0x48, alise="SGM58031"):
+        # Initialization command
+        self.i2c_dev = I2C(I2C.I2C0, I2C.STANDARD_MODE)  # Return I2C object
+        self.i2c_addr = addr
+
+        self.register_map = {
+            "Conversion_Register": 0x0000,
+            "Config_Register": 0x0000,
+            "Low_Thresh_Register": 0x8000,
+            "High_Thresh_Register": 0x7FFF,
+            "Config1_Register": 0x0000,
+            "Chip_ID_Register": 0x0000,
+            "GN_Trim1_Register": 0x0000,
+        }
+
+        self.register_addr = {
+            "CONVERSION_REG": 0x00,
+            "CONF_REG": 0x01,
+            "LOW_THRESH_REG": 0x02,
+            "HIGH_THRESH_REG": 0x03,
+            "CONF1_REG": 0x04,
+            "CHIP_ID_REG": 0x05,
+            "GN_TRIM1_REG": 0x06,
+        }
+
+        self.os_sel = {
+            "No_Effect": 0x00,  # 0 = No effect
+            # 1 = Start a single conversion (when in single-shot mode)
+            "Start_Single_Conversion": 0x01,
+        }
+
+        self.mux_sel = {
+            "AINP_AIN0_AND_AINN_AIN1": 0x00,  # 000 = AINP = AIN0 and AINN = AIN1 (default)
+            "AINP_AIN0_AND_AINN_AIN3": 0x01,  # 001 = AINP = AIN0 and AINN = AIN3
+            "AINP_AIN1_AND_AINN_AIN3": 0x02,  # 010 = AINP = AIN1 and AINN = AIN3
+            "AINP_AIN2_AND_AINN_AIN3": 0x03,  # 011 = AINP = AIN2 and AINN = AIN3
+            "AINP_AIN0_AND_AINN_GND": 0x04,  # 100 = AINP = AIN0 and AINN = GND
+            "AINP_AIN1_AND_AINN_GND": 0x05,  # 101 = AINP = AIN1 and AINN = GND
+            "AINP_AIN2_AND_AINN_GND": 0x06,  # 110 = AINP = AIN2 and AINN = GND
+            "AINP_AIN3_AND_AINN_GND": 0x07,
+        }  # 111 = AINP = AIN3 and AINN = GND
+
+        self.pga_sel = {
+            "FS_6_144V": 0x00,  # 000 = FS = +/-6.144V
+            "FS_4_096V": 0x01,  # 001 = FS = +/-4.096V
+            "FS_2_048V": 0x02,  # 010 = FS = +/-2.048V (default)
+            "FS_1_024V": 0x03,  # 011 = FS = +/-1.024V
+            "FS_0_512V": 0x04,  # 100 = FS = +/-0.512V
+            "FS_0_256V": 0x05,
+        }  # 101 = FS = +/-0.256V
+
+        self.mode_sel = {
+            "Continuous_Conversion_Mode": 0x00,  # 0 = Continuous conversion mode
+            # 1 = Power-down single-shot mode (default)
+            "Single_Shot_Mode": 0x01,
+        }
+
+        # | DR[2:0]Bits        | DR_SEL Bit in Config1Register |
+        # | in Config Register | DR_SEL = 0 | DR_SEL = 1 |
+        # | 000                | 6.25Hz     | 7.5Hz      |
+        # | 001                | 12.5Hz     | 15Hz       |
+        # | 010                | 25Hz       | 30Hz       |
+        # | 011                | 50Hz       | 60Hz       |
+        # | 100                | 100Hz      | 120Hz      |
+        # | 101                | 200Hz      | 240Hz      |
+        # | 110                | 400Hz      | 480Hz      |
+        # | 111                | 800Hz      | 960HZ      |
+        self.dr_sel = {
+            "DR_6_25Hz_7_5Hz": 0x00,
+            "DR_12_5Hz_15Hz": 0x01,
+            "DR_25Hz_30Hz": 0x02,
+            "DR_50Hz_60Hz": 0x03,
+            "DR_100Hz_120Hz": 0x04,
+            "DR_200Hz_240Hz": 0x05,
+            "DR_400Hz_480Hz": 0x06,
+            "DR_800Hz_960Hz": 0x07,
+        }
+
+        self.comp_mode_sel = {
+            "Traditional_Comparator": 0x00,  # 0 = A traditional comparator with hysteresis (default)
+            "Window_Comparator": 0x01,
+        }  # 1 = A window comparator
+
+        self.comp_pol_sel = {"Active_Low": 0x00, "Active_High": 0x01}
+        self.comp_lat_sel = {"Non_Latching": 0x00, "Latching": 0x01}
+
+        self.comp_que_sel = {
+            "Assert_After_One_Conversion": 0x00,  # 00 = Assert after one conversion
+            "Assert_After_Two_Conversions": 0x01,  # 01 = Assert after two conversions
+            "Assert_After_Four_Conversions": 0x02,  # 10 = Assert after four conversions
+            # Disable comparator (default)
+            "Disable_Comparator": 0x03,
+        }
+
+        self.dr_sel_sel = {
+            "DR_SEL0": 0x00,  # 0 = DR[2:0] = 000 ~ 111 for conversion rate of 6.25Hz, 12.5Hz, 25Hz,
+            # 50Hz, 100Hz, 200Hz, 400Hz and 800Hz (default)
+            # 1 = DR[2:0] = 000 ~ 111 for conversion rate of 7.5Hz, 15Hz, 30Hz,
+            "DR_SEL1": 0x01,
+        }
+        # 60Hz, 120Hz, 240Hz, 480Hz and 960Hz
+        self.battery_voltage = None
+        self.voltage = None
+        self.flip_sign = True
+        self.config_reg_init()
+        pass
+
+    def config_reg_init(self, low_thresh_register=0x8000, high_thresh_register=0x7FFF):
+        # Initialise the SGM58031 registers
+        self.register_map["Config_Register"] = (
+            (self.os_sel["Start_Single_Conversion"] << 15 & 0x8000)
+            | (self.mux_sel["AINP_AIN2_AND_AINN_AIN3"] << 12 & 0x7000)
+            | (self.pga_sel["FS_4_096V"] << 9 & 0x0E00)
+            | (self.mode_sel["Single_Shot_Mode"] << 8 & 0x0100)
+            | (self.dr_sel["DR_800Hz_960Hz"] << 5 & 0x00E0)
+            | (self.comp_mode_sel["Traditional_Comparator"] << 4 & 0x0010)
+            | (self.comp_pol_sel["Active_Low"] << 3 & 0x0008)
+            | (self.comp_lat_sel["Non_Latching"] << 2 & 0x0004)
+            | (self.comp_que_sel["Disable_Comparator"])
+        )
+        self.register_map["Low_Thresh_Register"] = low_thresh_register
+        self.register_map["High_Thresh_Register"] = high_thresh_register
+        self.register_map["Config1_Register"] = self.dr_sel_sel["DR_SEL0"] << 7 & 0x0080
+        pass
+
+    def self_verifying(self):
+        # -1- Read_CHIP_ID
+        tmp = self.read_register([self.register_addr["CHIP_ID_REG"]], 2)
+        print("####################################################################")
+        print(
+            "----------------------------CHIP_ID = %x----------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != 0x80:
+            return False
+        # -2- Set the Configuration Register
+        self.write_register(
+            [self.register_addr["CONF_REG"]],
+            [
+                self.register_map["Config_Register"] >> 8,
+                (self.register_map["Config_Register"] & 0xFF),
+            ],
+        )
+        # -3- Read the Configuration Register
+        tmp = self.read_register([self.register_addr["CONF_REG"]], 2)
+        print(
+            "--------------------------CONF_REG = %x---------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if (((tmp[0] << 8) | tmp[1]) & 0x7FFF) != (
+            self.register_map["Config_Register"] & 0x7FFF
+        ):
+            return False
+
+        # -4- Set the Configuration1 Register
+        self.write_register(
+            [self.register_addr["CONF1_REG"]],
+            [
+                self.register_map["Config1_Register"] >> 8,
+                (self.register_map["Config1_Register"] & 0xFF),
+            ],
+        )
+        # -5- Read the Configuration1 Register
+        tmp = self.read_register([self.register_addr["CONF1_REG"]], 2)
+        print(
+            "----------------------------CONF1_REG = %x---------------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["Config1_Register"]:
+            return False
+
+        # -6- Set the Low Thresh Register
+        self.write_register(
+            [self.register_addr["LOW_THRESH_REG"]],
+            [
+                self.register_map["Low_Thresh_Register"] >> 8,
+                (self.register_map["Low_Thresh_Register"] & 0xFF),
+            ],
+        )
+        # -7- Read the Low Thresh Register
+        tmp = self.read_register([self.register_addr["LOW_THRESH_REG"]], 2)
+        print(
+            "---------------------Low_Thresh_Register = %x---------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["Low_Thresh_Register"]:
+            return False
+
+        # -8- Set the High Thresh Register
+        self.write_register(
+            [self.register_addr["HIGH_THRESH_REG"]],
+            [
+                self.register_map["High_Thresh_Register"] >> 8,
+                (self.register_map["High_Thresh_Register"] & 0xFF),
+            ],
+        )
+        # -9- Read the High Thresh Register
+        tmp = self.read_register([self.register_addr["HIGH_THRESH_REG"]], 2)
+        print(
+            "--------------------High_Thresh_Register = %x---------------------"
+            % ((tmp[0] << 8) | tmp[1])
+        )
+        if ((tmp[0] << 8) | tmp[1]) != self.register_map["High_Thresh_Register"]:
+            return False
+        print("--------------------sgm58031 initial completed~!--------------------")
+        print("####################################################################")
+        return True
+
+    def write_register(self, register_addr, bytes_list):
+        self.i2c_dev.write(
+            self.i2c_addr,
+            bytearray(register_addr),
+            len(register_addr),
+            bytearray(bytes_list),
+            len(bytes_list),
+        )
+
+    def read_register(self, register_addr, length):
+        bytes_list = [0x00 for _ in range(length)]
+        bytes_list = bytearray(bytes_list)
+        self.i2c_dev.write(
+            self.i2c_addr,
+            bytearray(register_addr),
+            len(register_addr),
+            bytearray(0x00),
+            0,
+        )
+        self.i2c_dev.read(self.i2c_addr, bytearray(0x00), 0, bytes_list, length, 0)
+        return list(bytes_list)
+
+    def measure_adc_value(self):
+        # -1- read the OS of Configuration Register
+        global msg_id, state
+        tmp = self.read_register([self.register_addr["CONF_REG"]], 2)
+        if tmp[0] >> 7 == 1:
+            if self.flip_sign:
+                tmp = self.read_register([self.register_addr["CONVERSION_REG"]], 2)
+                self.battery_voltage = float(
+                    "%.3f" % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 11)
+                )
+                app_log.info("battery_voltage = {}".format(self.battery_voltage))
+            else:
+                tmp = self.read_register([self.register_addr["CONVERSION_REG"]], 2)
+                self.voltage = float(
+                    "%.3f" % (((tmp[0] << 8) | tmp[1]) / 32768 * 4.096 * 21)
+                )
+                app_log.info("voltage = {}".format(self.voltage))
+
+            msg_id += 1
+            state = ali.publish(
+                property_publish_topic.encode("utf-8"),
+                msg_voltage.format(msg_id, self.battery_voltage, self.voltage).encode(
+                    "utf-8"
+                ),
+            )
+
+        # -2- Initialise the SGM58031 peripheral
+        if self.flip_sign:
+            self.register_map["Config_Register"] = (
+                self.register_map["Config_Register"] & 0x8FFF
+            ) | (self.mux_sel["AINP_AIN0_AND_AINN_AIN1"] << 12 & 0x7000)
+        else:
+            self.register_map["Config_Register"] = (
+                self.register_map["Config_Register"] & 0x8FFF
+            ) | (self.mux_sel["AINP_AIN2_AND_AINN_AIN3"] << 12 & 0x7000)
+        self.flip_sign = not self.flip_sign
+
+        # -3- Set the Configuration Register
+        self.write_register(
+            [self.register_addr["CONF_REG"]],
+            [
+                self.register_map["Config_Register"] >> 8,
+                (self.register_map["Config_Register"] & 0xFF),
+            ],
+        )
 
 
 class Uart2(object):
@@ -502,6 +785,26 @@ def sim_task():
         utime.sleep(7200)
 
 
+def send_heartbeat():
+    while True:
+        utime.sleep(120)  # 2分钟发送一次心跳包
+        # 检查网络状态
+        stagecode, subcode = checknet.wait_network_connected(30)
+        if stagecode == 3 and subcode == 1:
+            # 网络正常，发送心跳包
+            uart2_inst.uartWrite(b"Heartbeat")
+        else:
+            # 网络不正常，不发送心跳包
+            app_log.info("Network not connected, skipping heartbeat")
+        # 等待一段时间后再次发送心跳包
+
+
+def measure_adc_task():
+    while True:
+        sgm58031_dev.measure_adc_value()
+        utime.sleep(1200)
+
+
 def chect_net_task():
     global msg_id, ali
     while True:
@@ -516,7 +819,7 @@ def chect_net_task():
                     # 重新创建 ali 对象
                     ali = aLiYun(
                         ProductKey, ProductSecret, DeviceName, DeviceSecret, MqttServer
-                    )  
+                    )
 
                 mqtt_state = ali.getAliyunSta()
                 if mqtt_state == -1:
@@ -572,22 +875,22 @@ def mqtt_sub_cb(topic, msg):
 
 if __name__ == "__main__":
     utime.sleep(5)
-    pdpCtx = dataCall.getPDPContext(1)
-    app_log.info("pdpCtx:{}".format(pdpCtx))
-    if pdpCtx != -1:
-        if pdpCtx[1] != usrConfig["apn"]:
-            ret = dataCall.setPDPContext(
-                1, 0, usrConfig["apn"], usrConfig["username"], usrConfig["password"], 0
-            )
-            if ret == 0:
-                app_log.info("APN config success.")
-                Power.powerRestart()
-            else:
-                app_log.info("APN config failed.")
-        else:
-            app_log.info("APN configured.")
-    else:
-        app_log.info("get PDP Context failed.")
+    # pdpCtx = dataCall.getPDPContext(1)
+    # app_log.info("pdpCtx:{}".format(pdpCtx))
+    # if pdpCtx != -1:
+    #     if pdpCtx[1] != usrConfig["apn"]:
+    #         ret = dataCall.setPDPContext(
+    #             1, 0, usrConfig["apn"], usrConfig["username"], usrConfig["password"], 0
+    #         )
+    #         if ret == 0:
+    #             app_log.info("APN config success.")
+    #             Power.powerRestart()
+    #         else:
+    #             app_log.info("APN config failed.")
+    #     else:
+    #         app_log.info("APN configured.")
+    # else:
+    #     app_log.info("get PDP Context failed.")
 
     checknet.poweron_print_once()
     stagecode, subcode = checknet.wait_network_connected(30)
@@ -595,6 +898,9 @@ if __name__ == "__main__":
         app_log.info("Network connection successful!")
         wdt = WDT(20)
         timer.start(period=15000, mode=timer.PERIODIC, callback=feed)  # 使用定时器喂狗
+        sgm58031_dev = SGM58031Class()
+        if not sgm58031_dev.self_verifying():
+            app_log.info("#----sgm58031 initial false~!----#")
 
         # 创建aliyun连接对象
         ali = aLiYun(ProductKey, ProductSecret, DeviceName, DeviceSecret, MqttServer)
@@ -627,6 +933,8 @@ if __name__ == "__main__":
         _thread.start_new_thread(cell_location_task, ())
         _thread.start_new_thread(sim_task, ())
         _thread.start_new_thread(chect_net_task, ())
+        _thread.start_new_thread(send_heartbeat, ())
+        _thread.start_new_thread(measure_adc_task, ())
 
         while True:
             if state == True:
@@ -650,3 +958,4 @@ if __name__ == "__main__":
                 stagecode, subcode
             )
         )
+        Power.powerRestart()
