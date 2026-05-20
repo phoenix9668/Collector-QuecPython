@@ -22,11 +22,12 @@ PROJECT_VERSION = "3.2.2"
 checknet = checkNet.CheckNetwork(PROJECT_NAME, PROJECT_VERSION)
 TaskEnable = True  # 调用disconnect后会通过该状态回收线程资源
 msg_id = 0
+mqtt_client = None
 state = 0
 mqtt_sub_msg = {}
 signs_data = {}
 
-log.basicConfig(level=log.DEBUG)
+log.basicConfig(level=log.INFO)
 app_log = log.getLogger("app_log")
 
 
@@ -315,7 +316,7 @@ class Uart2(object):
             signs_data["reset_cnt"] = (int(hex_msg[190]) << 8) | int(hex_msg[191])
             signs_data["signal_strength"] = calc_rssi_dbm(int(hex_msg[192]))
             signs_data["utc_time"] = int(round(utime.mktime(utime.localtime()) * 1000))
-            app_log.info(signs_data)
+            app_log.debug(signs_data)
 
             msg_id += 1
             mqtt_client.publish(
@@ -864,11 +865,11 @@ def chect_net_task():
                 if mqtt_client is None:
                     # 重新创建 ali 对象
                     mqtt_client = MqttClient(
-                        clientid="he2maYabo9j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755002046879|",
-                        server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+                        clientid="k12xglywBbh.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1779245750867|",
+                        server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
                         port=1883,
-                        user="BW-XC-200-029&he2maYabo9j",
-                        password="9b1fbaa59663cd4c36653ddb3e49955f11e7b4cae554681d901524c88091fa74",
+                        user="BW-XC-200-048&k12xglywBbh",
+                        password="c6a61d289e083be86bd5b0dc7d7616007b02dbcd12146edeba6494d5e72c0356",
                         keepalive=60,
                         reconn=True,
                     )
@@ -930,7 +931,9 @@ def chect_net_task():
 
 def mqtt_sub_cb(topic, msg):
     global state, mqtt_sub_msg
-    app_log.info("Subscribe Recv: Topic={},Msg={}".format(topic.decode(), msg.decode()))
+    app_log.debug(
+        "Subscribe Recv: Topic={},Msg={}".format(topic.decode(), msg.decode())
+    )
     mqtt_sub_msg = ujson.loads(msg.decode())
     state = 1
     app_log.debug(mqtt_sub_msg["params"])
@@ -1141,9 +1144,12 @@ if __name__ == "__main__":
                             "method": "thing.event.property.post"
                          }}"""
 
-        ProductKey = "he2maYabo9j"  # 产品标识
+        # ProductKey = "he2maYabo9j"  # 产品标识
+        # ProductKey = "k1lpuopEm5j"  # 产品标识
+        # ProductKey = "k12xgT6mw7H"  # 产品标识
+        ProductKey = "k12xglywBbh"  # 产品标识和林一牧
         # DeviceName = "BW-XC-200-020"  # 设备名称
-        DeviceName = "BW-XC-200-029"  # 设备名称
+        # DeviceName = "BW-XC-200-029"  # 设备名称
         # DeviceName = "BW-XC-200-031"  # 设备名称
         # DeviceName = "BW-XC-200-035"  # 设备名称
         # DeviceName = "BW-XC-200-036"  # 设备名称
@@ -1155,6 +1161,21 @@ if __name__ == "__main__":
         # DeviceName = "BW-XC-200-042"  # 设备名称
         # DeviceName = "BW-XC-200-043"  # 设备名称
         # DeviceName = "BW-XC-200-044"  # 设备名称
+        # DeviceName = "BW-XC-200-045"  # 设备名称
+        # DeviceName = "BW-XC-200-046"  # 设备名称
+        # DeviceName = "BW-XC-200-047"  # 设备名称
+        DeviceName = "BW-XC-200-048"  # 设备名称
+        # DeviceName = "BW-XC-200-001"  # 设备名称
+        # DeviceName = "BW-XC-200-002"  # 设备名称
+        # DeviceName = "BW-XC-200-003"  # 设备名称
+        # DeviceName = "BW-XC-200-004"  # 设备名称
+        # DeviceName = "BW-XC-200-007"  # 设备名称
+        # DeviceName = "BW-XC-200-006"  # 设备名称
+        # DeviceName = "BW-XC-200-029"  # 设备名称
+        # DeviceName = "BW-XC-200-036"  # 设备名称
+        # DeviceName = "BW-XC-200-037"  # 设备名称
+        # DeviceName = "BW-XC-200-039"  # 设备名称
+        # DeviceName = "BW-XC-200-043"  # 设备名称
 
         property_subscribe_topic = (
             "/sys"
@@ -1177,6 +1198,88 @@ if __name__ == "__main__":
 
         # 创建一个mqtt实例
         # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-042|securemode=2,signmethod=hmacsha256,timestamp=1766995742569|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-042&k12xgT6mw7H",
+        #     password="def410cc7b8119e2d0315936a862eb3a3b793bddeac23fc97d67a1a837d5dba0",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-001|securemode=2,signmethod=hmacsha256,timestamp=1767838759602|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-001&k12xgT6mw7H",
+        #     password="e13fed70b72eeba0104835185d731740698b3ae8b5942cf69705b24c695ae403",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-002|securemode=2,signmethod=hmacsha256,timestamp=1767840783940|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-002&k12xgT6mw7H",
+        #     password="b0353cc2666cf90e3c2ed1737f46b23ad00becdffd2b4cdc8e4ea7ebfaa068fb",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-003|securemode=2,signmethod=hmacsha256,timestamp=1767842133226|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-003&k12xgT6mw7H",
+        #     password="196f6512796e56ca6c56ca337cf40bf575a3dd50d2106d26b572a831ef5b6d20",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-004|securemode=2,signmethod=hmacsha256,timestamp=1767843511564|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-004&k12xgT6mw7H",
+        #     password="cd974eb250407aaa635cc4b2979fd1dc1a7fa42d865746feabe5551da3010d8e",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-045|securemode=2,signmethod=hmacsha256,timestamp=1767844472121|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-045&k12xgT6mw7H",
+        #     password="d6fe4b7b63d02d6d0b4aa86f1c1c9c45e7abd242228f81c1ce1b6ba53aece48a",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-046|securemode=2,signmethod=hmacsha256,timestamp=1767845230027|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-046&k12xgT6mw7H",
+        #     password="4a4e5c57dd824bd5a6791e8bb1ddec56da9f731ef727de2ff1979a42a635422b",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-047|securemode=2,signmethod=hmacsha256,timestamp=1767846046562|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-047&k12xgT6mw7H",
+        #     password="81f2247114730eaa14811cc2f8b2888008577a90a1753574e482a433f04d760e",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1770353321855|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-048&k12xgT6mw7H",
+        #     password="95155754e04433fd284f9c30527202f20165530a5d10967900de6c64660f7edc",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+
+        # mqtt_client = MqttClient(
         #     clientid="he2maYabo9j.BW-XC-200-020|securemode=2,signmethod=hmacsha256,timestamp=1753170365331|",
         #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
         #     port=1883,
@@ -1185,15 +1288,24 @@ if __name__ == "__main__":
         #     keepalive=60,
         #     reconn=True,
         # )
-        mqtt_client = MqttClient(
-            clientid="he2maYabo9j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755002046879|",
-            server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
-            port=1883,
-            user="BW-XC-200-029&he2maYabo9j",
-            password="9b1fbaa59663cd4c36653ddb3e49955f11e7b4cae554681d901524c88091fa74",
-            keepalive=60,
-            reconn=True,
-        )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755002046879|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-029&he2maYabo9j",
+        #     password="9b1fbaa59663cd4c36653ddb3e49955f11e7b4cae554681d901524c88091fa74",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k1lpuopEm5j.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1755701560292|",
+        #     server="iot-06z00i0fhc1e85a.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-029&k1lpuopEm5j",
+        #     password="1f5e421dead59f93989338acf073c099fe1f90c043e36346dd6731e61c794395",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
         # mqtt_client = MqttClient(
         #     clientid="he2maYabo9j.BW-XC-200-031|securemode=2,signmethod=hmacsha256,timestamp=1740711365522|",
         #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
@@ -1227,6 +1339,15 @@ if __name__ == "__main__":
         #     port=1883,
         #     user="BW-XC-200-037&he2maYabo9j",
         #     password="e426535bc776dfd74f44d413d2d1f156b71217be22e301603b202434f1ce5cc7",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k1lpuopEm5j.BW-XC-200-037|securemode=2,signmethod=hmacsha256,timestamp=1755703490667|",
+        #     server="iot-06z00i0fhc1e85a.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-037&k1lpuopEm5j",
+        #     password="26cc3137fb4ffecac69d848025a78e42b095430f96ec80ac262d69e0ce73563f",
         #     keepalive=60,
         #     reconn=True,
         # )
@@ -1293,6 +1414,160 @@ if __name__ == "__main__":
         #     keepalive=60,
         #     reconn=True,
         # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-045|securemode=2,signmethod=hmacsha256,timestamp=1761398436839|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-045&he2maYabo9j",
+        #     password="4391b5707efcec072628ddd0ed529f7309f5dd505591f302cebd6dc5354717b2",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-046|securemode=2,signmethod=hmacsha256,timestamp=1761398780361|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-046&he2maYabo9j",
+        #     password="6bcf0e62a6712942cfda9ac46d804e0907157123acef7f7eea5f77085d09dc52",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-047|securemode=2,signmethod=hmacsha256,timestamp=1761400575942|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-047&he2maYabo9j",
+        #     password="0fb2f59f74b2257d239d3203e1ff8e95fc2467cafa2d2f7504ea8315d747e027",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-001|securemode=2,signmethod=hmacsha256,timestamp=1761401423932|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-001&he2maYabo9j",
+        #     password="55b6cb6ac570ce2c0d1d16477c05a60709bd27670505b43c65f415eb804bddcc",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-002|securemode=2,signmethod=hmacsha256,timestamp=1761401691226|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-002&he2maYabo9j",
+        #     password="26e416f9c298a122975ffdbabeb3abcd20cb457c017baff22d99f4bfc4cdc585",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-003|securemode=2,signmethod=hmacsha256,timestamp=1761403273469|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-003&he2maYabo9j",
+        #     password="9187e3459690c9b42e268e4742558a62f83853556c92f58f85b959f64e62640e",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-004|securemode=2,signmethod=hmacsha256,timestamp=1761403759505|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-004&he2maYabo9j",
+        #     password="3484573bf6748e19570387868bee1f927985a70111a50f022734952e8e0330ed",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-006|securemode=2,signmethod=hmacsha256,timestamp=1761404104172|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-006&he2maYabo9j",
+        #     password="34088bc02c6b8675b85170e43c095d3b1e438829c3612ebc42ebef77fe7ec681",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="he2maYabo9j.BW-XC-200-007|securemode=2,signmethod=hmacsha256,timestamp=1761634333315|",
+        #     server="iot-06z00dcnrlb8g5r.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-007&he2maYabo9j",
+        #     password="beef3681efa89340abe46010ac14bf32c030dfc38620169062758202b9a04d83",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-006|securemode=2,signmethod=hmacsha256,timestamp=1773819359308|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-006&k12xgT6mw7H",
+        #     password="6d6c637262ef0b1b6a19dbf387469b598a15b5de70c1fa05451ee4250a9e5817",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-029|securemode=2,signmethod=hmacsha256,timestamp=1773819496872|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-029&k12xgT6mw7H",
+        #     password="51be51fad49b73077368c2733d3397488a7d267b7259572ab0520676d709343d",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-036|securemode=2,signmethod=hmacsha256,timestamp=1773819557292|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-036&k12xgT6mw7H",
+        #     password="6e08e7512ca9f1d4342e6c8020de15bcdb191286a09670cf6ca3ff5c9591500f",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-037|securemode=2,signmethod=hmacsha256,timestamp=1773819628207|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-037&k12xgT6mw7H",
+        #     password="3f8d12dfeebdd1247a4761e35aa6ac74186f0ab4edc5ae9fbd77a257d7c8b391",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-039|securemode=2,signmethod=hmacsha256,timestamp=1773819669443|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-039&k12xgT6mw7H",
+        #     password="7fe47e42f94da68ab47c775d43912f86598ef0f9490d6ba81fbbcbed0244202f",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-043|securemode=2,signmethod=hmacsha256,timestamp=1773819713544|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-043&k12xgT6mw7H",
+        #     password="2419de62aa4f2b071d41ecaf0dd2e4f74c76ecfb15d27448efc30c46cee91877",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xglywBbh.BW-XC-200-007|securemode=2,signmethod=hmacsha256,timestamp=1775197390561|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-007&k12xglywBbh",
+        #     password="e72270fabf4ad5d749ea0e04b3440f7ff200653ac0a33a936cb5d07946e80d6c",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        mqtt_client = MqttClient(
+            clientid="k12xglywBbh.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1779245750867|",
+            server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+            port=1883,
+            user="BW-XC-200-048&k12xglywBbh",
+            password="c6a61d289e083be86bd5b0dc7d7616007b02dbcd12146edeba6494d5e72c0356",
+            keepalive=60,
+            reconn=True,
+        )
 
         # 设置消息回调
         mqtt_client.set_callback(mqtt_sub_cb)
