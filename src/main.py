@@ -865,11 +865,11 @@ def chect_net_task():
                 if mqtt_client is None:
                     # 重新创建 ali 对象
                     mqtt_client = MqttClient(
-                        clientid="k12xglywBbh.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1779245750867|",
+                        clientid="k12xgT6mw7H.BW-XC-200-007|securemode=2,signmethod=hmacsha256,timestamp=1780457561694|",
                         server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
                         port=1883,
-                        user="BW-XC-200-048&k12xglywBbh",
-                        password="c6a61d289e083be86bd5b0dc7d7616007b02dbcd12146edeba6494d5e72c0356",
+                        user="BW-XC-200-007&k12xgT6mw7H",
+                        password="dc4dd0927c20f21e4bcb81ac617234abc35d5230714f1188a1be2ade7616f54f",
                         keepalive=60,
                         reconn=True,
                     )
@@ -1146,8 +1146,8 @@ if __name__ == "__main__":
 
         # ProductKey = "he2maYabo9j"  # 产品标识
         # ProductKey = "k1lpuopEm5j"  # 产品标识
-        # ProductKey = "k12xgT6mw7H"  # 产品标识
-        ProductKey = "k12xglywBbh"  # 产品标识和林一牧
+        ProductKey = "k12xgT6mw7H"  # 产品标识
+        # ProductKey = "k12xglywBbh"  # 产品标识和林一牧
         # DeviceName = "BW-XC-200-020"  # 设备名称
         # DeviceName = "BW-XC-200-029"  # 设备名称
         # DeviceName = "BW-XC-200-031"  # 设备名称
@@ -1164,12 +1164,12 @@ if __name__ == "__main__":
         # DeviceName = "BW-XC-200-045"  # 设备名称
         # DeviceName = "BW-XC-200-046"  # 设备名称
         # DeviceName = "BW-XC-200-047"  # 设备名称
-        DeviceName = "BW-XC-200-048"  # 设备名称
+        # DeviceName = "BW-XC-200-048"  # 设备名称
         # DeviceName = "BW-XC-200-001"  # 设备名称
         # DeviceName = "BW-XC-200-002"  # 设备名称
         # DeviceName = "BW-XC-200-003"  # 设备名称
         # DeviceName = "BW-XC-200-004"  # 设备名称
-        # DeviceName = "BW-XC-200-007"  # 设备名称
+        DeviceName = "BW-XC-200-007"  # 设备名称
         # DeviceName = "BW-XC-200-006"  # 设备名称
         # DeviceName = "BW-XC-200-029"  # 设备名称
         # DeviceName = "BW-XC-200-036"  # 设备名称
@@ -1559,12 +1559,39 @@ if __name__ == "__main__":
         #     keepalive=60,
         #     reconn=True,
         # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xglywBbh.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1779245750867|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-048&k12xglywBbh",
+        #     password="c6a61d289e083be86bd5b0dc7d7616007b02dbcd12146edeba6494d5e72c0356",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-031|securemode=2,signmethod=hmacsha256,timestamp=1780452862807|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-031&k12xgT6mw7H",
+        #     password="81b0cd5b6b5e5b61759e7ecdf47b13590772fa4e17a4e5370e3991bc2f93a9ad",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
+        # mqtt_client = MqttClient(
+        #     clientid="k12xgT6mw7H.BW-XC-200-035|securemode=2,signmethod=hmacsha256,timestamp=1780388420710|",
+        #     server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
+        #     port=1883,
+        #     user="BW-XC-200-035&k12xgT6mw7H",
+        #     password="0ce8ab43a7eeb2142451abaac3d32e3ef32619e61d83ca48d23d9f15faf6a3dd",
+        #     keepalive=60,
+        #     reconn=True,
+        # )
         mqtt_client = MqttClient(
-            clientid="k12xglywBbh.BW-XC-200-048|securemode=2,signmethod=hmacsha256,timestamp=1779245750867|",
+            clientid="k12xgT6mw7H.BW-XC-200-007|securemode=2,signmethod=hmacsha256,timestamp=1780457561694|",
             server="iot-06z00eu1sc0k51m.mqtt.iothub.aliyuncs.com",
             port=1883,
-            user="BW-XC-200-048&k12xglywBbh",
-            password="c6a61d289e083be86bd5b0dc7d7616007b02dbcd12146edeba6494d5e72c0356",
+            user="BW-XC-200-007&k12xgT6mw7H",
+            password="dc4dd0927c20f21e4bcb81ac617234abc35d5230714f1188a1be2ade7616f54f",
             keepalive=60,
             reconn=True,
         )
