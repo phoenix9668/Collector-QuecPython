@@ -124,7 +124,7 @@
       "name": "以太网状态",
       "accessMode": "r",
       "required": false,
-      "desc": "兼容保留字段，EC600M 4.0.0版本不使用以太网接口。",
+      "desc": "兼容保留字段，EC600M 4.x版本不使用以太网接口。",
       "dataType": {
         "type": "struct",
         "specs": [

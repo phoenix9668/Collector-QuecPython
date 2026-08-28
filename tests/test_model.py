@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from build_model_zip import build  # noqa: E402
+from build_model_zip import build, validate_model  # noqa: E402
 
 
 class ModelTests(unittest.TestCase):
@@ -34,6 +34,12 @@ class ModelTests(unittest.TestCase):
         event_ids = {item["identifier"] for item in default["events"]}
         self.assertIn("debugLog", event_ids)
         self.assertIn("runtimeLog", event_ids)
+        runtime = next(
+            item for item in default["events"] if item["identifier"] == "runtimeLog"
+        )
+        runtime_fields = {item["identifier"] for item in runtime["outputData"]}
+        self.assertIn("metricValue", runtime_fields)
+        self.assertNotIn("value", runtime_fields)
         product = models["产品信息.json"]
         properties = {item["identifier"]: item for item in product["properties"]}
         self.assertIn("AppVersion", properties)
@@ -62,6 +68,21 @@ class ModelTests(unittest.TestCase):
                 "UTCtime",
             ],
         )
+
+    def test_reserved_identifier_is_rejected_before_archive_is_written(self):
+        invalid = {
+            "events": [
+                {
+                    "identifier": "runtimeLog",
+                    "method": "thing.event.runtimeLog.post",
+                    "outputData": [
+                        {"identifier": "value", "dataType": {"type": "int"}}
+                    ],
+                }
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "reserved identifier 'value'"):
+            validate_model(invalid, "invalid.json")
 
     def test_import_zip_contains_valid_json(self):
         archive = ROOT / "doc" / "model.zip"

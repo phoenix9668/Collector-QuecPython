@@ -57,6 +57,24 @@ class LogTests(unittest.TestCase):
             self.assertNotIn("do-not-upload", debug["msg"])
             self.assertNotIn("also-secret", debug["extra"])
             runtime = published[1][1]
+            self.assertEqual(
+                set(runtime),
+                {
+                    "category",
+                    "targetType",
+                    "target",
+                    "action",
+                    "source",
+                    "desc",
+                    "temperature",
+                    "humidity",
+                    "metricValue",
+                    "seq",
+                    "version",
+                    "extra",
+                },
+            )
+            self.assertNotIn("value", runtime)
             self.assertIn("mqtt_state=connected", runtime["extra"])
             self.assertIn("net_state=stage=3", runtime["extra"])
 

@@ -63,7 +63,7 @@
       "identifier": "GeoLocation",
       "name": "地理位置",
       "accessMode": "r",
-      "desc": "兼容保留字段，EC600M 4.0.0版本不再采集外置GPS。",
+      "desc": "兼容保留字段，EC600M 4.x版本不再采集外置GPS。",
       "required": false,
       "dataType": {
         "type": "struct",
@@ -494,7 +494,7 @@
           }
         },
         {
-          "identifier": "value",
+          "identifier": "metricValue",
           "name": "事件值",
           "dataType": {
             "type": "int",
