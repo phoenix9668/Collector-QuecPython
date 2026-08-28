@@ -53,7 +53,7 @@ class FakeStorage:
 
 
 class OtaTests(unittest.TestCase):
-    def make_manager(self, storage=None):
+    def make_manager(self, storage=None, **kwargs):
         config = DeviceConfig(
             {
                 "productKey": "pk",
@@ -70,6 +70,7 @@ class OtaTests(unittest.TestCase):
             FakeLogger(),
             lambda: True,
             lambda: None,
+            **kwargs,
         )
 
     def test_version_and_alignment(self):
@@ -422,6 +423,66 @@ class OtaTests(unittest.TestCase):
                     manager._process_multi({}, "4.0.1")
             self.assertEqual(calls["flag"], 0)
             self.assertTrue(storage.restored)
+
+    def test_uart_activity_during_download_aborts_before_update_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            updater_dir = str(root / "updater")
+            target = "/virtual/collector_app.py"
+            content = b"value = 3\n"
+            item = {
+                "url": "http://bucket.aliyuncs.com/app.bin",
+                "file_name": target,
+                "size": len(content),
+                "md5": hashlib.md5(content).hexdigest(),
+            }
+            calls = {"activity": 0, "prepare": 0, "restore": 0, "flag": 0}
+
+            class FakeUpdater:
+                def bulk_download(self, _download_list):
+                    staged = Path(updater_dir + target)
+                    staged.parent.mkdir(parents=True, exist_ok=True)
+                    staged.write_bytes(content)
+                    calls["activity"] += 1
+                    return []
+
+                def set_update_flag(self, **_kwargs):
+                    calls["flag"] += 1
+                    return 0
+
+            def prepare():
+                calls["prepare"] += 1
+                return True
+
+            def restore():
+                calls["restore"] += 1
+                return True
+
+            app_fota = types.ModuleType("app_fota")
+            app_fota.new = lambda: FakeUpdater()
+            manager = self.make_manager(
+                storage_prepare=prepare,
+                storage_restore=restore,
+                activity_provider=lambda: calls["activity"],
+            )
+            manager._build_multi_files = lambda _data: ([item], 12288)
+            with (
+                patch.object(ota_module, "OTA_UPDATER_DIR", updater_dir),
+                patch.object(ota_module, "ROLLBACK_DIR", str(root / "rollback")),
+                patch.object(
+                    ota_module, "OTA_HEALTH_PENDING_FILE", str(root / "pending.json")
+                ),
+                patch.object(
+                    ota_module, "OTA_HEALTH_OK_FILE", str(root / "healthy")
+                ),
+                patch.dict(sys.modules, {"app_fota": app_fota}),
+                patch.object(ota_module, "sleep_ms", lambda _value: None),
+            ):
+                with self.assertRaisesRegex(OSError, "UART activity resumed"):
+                    manager._process_multi({}, "4.0.4")
+            self.assertEqual(calls["prepare"], 1)
+            self.assertGreaterEqual(calls["restore"], 1)
+            self.assertEqual(calls["flag"], 0)
 
     def test_multi_file_verification_supports_private_staging_layouts(self):
         with tempfile.TemporaryDirectory() as directory:

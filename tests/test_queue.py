@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import collector_queue as queue_module  # noqa: E402
+from collector_config import (  # noqa: E402
+    FILESYSTEM_SAFETY_BYTES,
+    FLASH_SPOOL_MAX_BYTES,
+    RUNTIME_STORAGE_ALLOWANCE_BYTES,
+)
 from collector_queue import (  # noqa: E402
     DeliveryStore,
     FlashJournal,
@@ -316,6 +321,60 @@ class QueueTests(unittest.TestCase):
             self.assertEqual(journal.depth(), 1)
             self.assertEqual(ram.depth(), 1)
             self.assertGreater(journal.io_errors, 0)
+
+    def test_empty_flash_journal_can_be_reclaimed_and_recreated_for_ota(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            paths = (
+                str(root / "queue.bin"),
+                str(root / "meta.0"),
+                str(root / "meta.1"),
+            )
+            journal = FlashJournal(*paths, RECORD_SIZE * 8)
+            delivery = DeliveryStore(
+                RawFrameQueue(8),
+                SequenceCounter(path=str(root / "seq.json"), save_every=8),
+                journal,
+            )
+            self.assertTrue(
+                journal.append_batch(
+                    [{"seq": 0, "timestamp_ms": 0, "frame": frame(0)}]
+                )
+            )
+            self.assertFalse(delivery.detach_empty_journal())
+            self.assertTrue(journal.ack(0))
+            self.assertTrue(delivery.detach_empty_journal())
+            self.assertIsNone(delivery.journal)
+            self.assertFalse(any(Path(path).exists() for path in paths))
+
+            recreated = FlashJournal(*paths, RECORD_SIZE * 8)
+            self.assertTrue(delivery.attach_journal(recreated))
+            self.assertIs(delivery.journal, recreated)
+
+    def test_576_kib_partition_uses_dynamic_bounded_spool(self):
+        budget = StorageBudget(
+            reserve_path="unused.reserve",
+            reserve_bytes=256 * 1024,
+            safety_bytes=FILESYSTEM_SAFETY_BYTES,
+            root="/usr",
+        )
+        budget.reserve_ready = True
+        # Approximate free space after the 256 KiB reserve and /usr/log
+        # directory have been created on the measured 576 KiB partition.
+        free_after_reserve = 132 * 1024
+        expected = (
+            free_after_reserve
+            - FILESYSTEM_SAFETY_BYTES
+            - RUNTIME_STORAGE_ALLOWANCE_BYTES
+        )
+        expected = (expected // RECORD_SIZE) * RECORD_SIZE
+        with patch.object(
+            queue_module,
+            "filesystem_free_bytes",
+            return_value=free_after_reserve,
+        ):
+            self.assertEqual(budget.spool_budget(), expected)
+            self.assertLessEqual(budget.spool_budget(), FLASH_SPOOL_MAX_BYTES)
 
     def test_ota_reserve_is_physically_allocated_and_restored(self):
         with tempfile.TemporaryDirectory() as temp:

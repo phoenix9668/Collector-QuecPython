@@ -16,12 +16,16 @@ SOURCE = ROOT / "src"
 sys.path.insert(0, str(SOURCE))
 
 from collector_config import (  # noqa: E402
+    FILESYSTEM_SAFETY_BYTES,
     OTA_DIRECTORY_BYTES as DIRECTORY_BYTES,
     OTA_MAX_APP_BYTES as MAX_ALIGNED_BYTES,
     OTA_MODULE_NAME as MODULE_NAME,
     OTA_MULTI_FILE_TARGETS as MULTI_FILE_TARGETS,
     PROJECT_VERSION as VERSION,
 )
+
+
+APP_FOTA_OVERHEAD_BYTES = 20 * 1024
 
 
 def aligned_size(size: int) -> int:
@@ -92,6 +96,11 @@ def build(output: Path) -> dict:
         "fileAlignedBytes": file_aligned_bytes,
         "directoryBytes": directory_bytes,
         "limitBytes": MAX_ALIGNED_BYTES,
+        # A self-update keeps the new staging copy and the old rollback copy
+        # together. app_fota also needs roughly 20 KiB for .updater metadata.
+        "selfUpdateRequiredBytes": (
+            total * 2 + APP_FOTA_OVERHEAD_BYTES + FILESYSTEM_SAFETY_BYTES
+        ),
         "files": files,
         "extData": {"_package_udi": json.dumps({"files": mapping}, ensure_ascii=False)},
         "legacy": {

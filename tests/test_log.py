@@ -78,7 +78,7 @@ class LogTests(unittest.TestCase):
             self.assertIn("mqtt_state=connected", runtime["extra"])
             self.assertIn("net_state=stage=3", runtime["extra"])
 
-    def test_critical_log_rotation_stays_within_128_kib(self):
+    def test_critical_log_rotation_and_ota_cleanup_stay_bounded(self):
         with tempfile.TemporaryDirectory() as directory:
             logger = StructuredLogger(local_dir=directory)
             for sequence in range(100):
@@ -93,6 +93,8 @@ class LogTests(unittest.TestCase):
             self.assertTrue(sizes)
             self.assertTrue(all(size <= LOCAL_LOG_MAX_BYTES for size in sizes))
             self.assertLessEqual(sum(sizes), LOCAL_LOG_MAX_BYTES * 2)
+            logger.clear_persistent()
+            self.assertFalse(any(path.exists() for path in paths))
 
 
 if __name__ == "__main__":

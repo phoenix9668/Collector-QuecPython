@@ -8,8 +8,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "src"))
 
 from build_ota_package import MAX_ALIGNED_BYTES, build  # noqa: E402
+from collector_config import (  # noqa: E402
+    FILESYSTEM_SAFETY_BYTES,
+    FLASH_SPOOL_MAX_BYTES,
+    LOCAL_LOG_TOTAL_BYTES,
+    OTA_RESERVED_BYTES,
+)
 
 
 class BuildTests(unittest.TestCase):
@@ -69,8 +76,23 @@ class BuildTests(unittest.TestCase):
             output = Path(directory) / "release"
             manifest = build(output)
             self.assertLessEqual(manifest["alignedBytes"], MAX_ALIGNED_BYTES)
+            self.assertEqual(MAX_ALIGNED_BYTES, 176 * 1024)
+            self.assertEqual(OTA_RESERVED_BYTES, 256 * 1024)
+            self.assertEqual(FLASH_SPOOL_MAX_BYTES, 96 * 1024)
+            self.assertEqual(LOCAL_LOG_TOTAL_BYTES, 16 * 1024)
             self.assertEqual(manifest["directoryBytes"], 8192)
             self.assertEqual(manifest["signMethod"], "MD5")
+            self.assertEqual(
+                manifest["selfUpdateRequiredBytes"],
+                manifest["alignedBytes"] * 2
+                + 20 * 1024
+                + FILESYSTEM_SAFETY_BYTES,
+            )
+            # The screenshot shows about 396 KiB free with 4.0.3. Version
+            # 4.0.4 adds one aligned block, so budget against 392 KiB.
+            self.assertLessEqual(
+                manifest["selfUpdateRequiredBytes"], 392 * 1024
+            )
             for item in manifest["files"]:
                 artifact = output / item["fileName"]
                 self.assertEqual(artifact.stat().st_size, item["fileSize"])
