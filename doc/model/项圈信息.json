@@ -1,0 +1,533 @@
+{
+  "schema": "https://iotx-tsl.oss-ap-southeast-1.aliyuncs.com/schema.json",
+  "profile": {
+    "version": "1.0",
+    "productKey": "k12xgT6mw7H"
+  },
+  "properties": [
+    {
+      "identifier": "SignsData",
+      "name": "体征数据",
+      "accessMode": "r",
+      "required": false,
+      "dataType": {
+        "type": "struct",
+        "specs": [
+          {
+            "identifier": "CollectorID",
+            "name": "基站编号",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "4"
+              }
+            }
+          },
+          {
+            "identifier": "RFID",
+            "name": "项圈编号",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "6"
+              }
+            }
+          },
+          {
+            "identifier": "GUID",
+            "name": "全球唯一标识",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "32"
+              }
+            }
+          },
+          {
+            "identifier": "restArray",
+            "name": "休息数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "ingestionArray",
+            "name": "采食数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "movementArray",
+            "name": "活动数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "climbArray",
+            "name": "爬跨数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "ruminateArray",
+            "name": "反刍数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "otherArray",
+            "name": "其他数据",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "24"
+              }
+            }
+          },
+          {
+            "identifier": "Stage",
+            "name": "循环数组标志",
+            "dataType": {
+              "type": "int",
+              "specs": {
+                "min": "0",
+                "max": "11",
+                "step": "1"
+              }
+            }
+          },
+          {
+            "identifier": "BatteryVoltage",
+            "name": "电池电压",
+            "dataType": {
+              "type": "float",
+              "specs": {
+                "min": "-1.4E-45",
+                "max": "3.4028235E38",
+                "unit": "%",
+                "unitName": "百分比",
+                "step": "0.1"
+              }
+            }
+          },
+          {
+            "identifier": "ResetCnt",
+            "name": "重启次数",
+            "dataType": {
+              "type": "int",
+              "specs": {
+                "min": "0",
+                "max": "65535",
+                "unit": "count",
+                "unitName": "次",
+                "step": "1"
+              }
+            }
+          },
+          {
+            "identifier": "SignalStrength",
+            "name": "项圈信号强度",
+            "dataType": {
+              "type": "int",
+              "specs": {
+                "min": "-120",
+                "max": "0",
+                "unit": "dB",
+                "unitName": "分贝",
+                "step": "1"
+              }
+            }
+          },
+          {
+            "identifier": "UTCtime",
+            "name": "UTC时间",
+            "dataType": {
+              "type": "date",
+              "specs": {}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "identifier": "post",
+      "name": "post",
+      "type": "info",
+      "required": true,
+      "desc": "属性上报",
+      "method": "thing.event.property.post",
+      "outputData": [
+        {
+          "identifier": "SignsData",
+          "name": "体征数据",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "CollectorID",
+                "name": "基站编号",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "4"
+                  }
+                }
+              },
+              {
+                "identifier": "RFID",
+                "name": "项圈编号",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "6"
+                  }
+                }
+              },
+              {
+                "identifier": "GUID",
+                "name": "全球唯一标识",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "restArray",
+                "name": "休息数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "ingestionArray",
+                "name": "采食数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "movementArray",
+                "name": "活动数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "climbArray",
+                "name": "爬跨数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "ruminateArray",
+                "name": "反刍数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "otherArray",
+                "name": "其他数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "Stage",
+                "name": "循环数组标志",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "11",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "BatteryVoltage",
+                "name": "电池电压",
+                "dataType": {
+                  "type": "float",
+                  "specs": {
+                    "min": "-1.4E-45",
+                    "max": "3.4028235E38",
+                    "unit": "%",
+                    "unitName": "百分比",
+                    "step": "0.1"
+                  }
+                }
+              },
+              {
+                "identifier": "ResetCnt",
+                "name": "重启次数",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "65535",
+                    "unit": "count",
+                    "unitName": "次",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "SignalStrength",
+                "name": "项圈信号强度",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "-120",
+                    "max": "0",
+                    "unit": "dB",
+                    "unitName": "分贝",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "UTCtime",
+                "name": "UTC时间",
+                "dataType": {
+                  "type": "date",
+                  "specs": {}
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "identifier": "set",
+      "name": "set",
+      "required": true,
+      "callType": "async",
+      "desc": "属性设置",
+      "method": "thing.service.property.set",
+      "inputData": [],
+      "outputData": []
+    },
+    {
+      "identifier": "get",
+      "name": "get",
+      "required": true,
+      "callType": "async",
+      "desc": "属性获取",
+      "method": "thing.service.property.get",
+      "inputData": [
+        "SignsData"
+      ],
+      "outputData": [
+        {
+          "identifier": "SignsData",
+          "name": "体征数据",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "CollectorID",
+                "name": "基站编号",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "4"
+                  }
+                }
+              },
+              {
+                "identifier": "RFID",
+                "name": "项圈编号",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "6"
+                  }
+                }
+              },
+              {
+                "identifier": "GUID",
+                "name": "全球唯一标识",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "restArray",
+                "name": "休息数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "ingestionArray",
+                "name": "采食数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "movementArray",
+                "name": "活动数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "climbArray",
+                "name": "爬跨数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "ruminateArray",
+                "name": "反刍数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "otherArray",
+                "name": "其他数据",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "24"
+                  }
+                }
+              },
+              {
+                "identifier": "Stage",
+                "name": "循环数组标志",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "11",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "BatteryVoltage",
+                "name": "电池电压",
+                "dataType": {
+                  "type": "float",
+                  "specs": {
+                    "min": "-1.4E-45",
+                    "max": "3.4028235E38",
+                    "unit": "%",
+                    "unitName": "百分比",
+                    "step": "0.1"
+                  }
+                }
+              },
+              {
+                "identifier": "ResetCnt",
+                "name": "重启次数",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "65535",
+                    "unit": "count",
+                    "unitName": "次",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "SignalStrength",
+                "name": "项圈信号强度",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "-120",
+                    "max": "0",
+                    "unit": "dB",
+                    "unitName": "分贝",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "UTCtime",
+                "name": "UTC时间",
+                "dataType": {
+                  "type": "date",
+                  "specs": {}
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "functionBlockId": "collar_information",
+  "functionBlockName": "项圈信息"
+}

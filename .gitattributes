@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Release artifacts must remain byte-for-byte stable.  In particular, the
+# Aliyun OTA manifest records the exact size and MD5 of every .py.bin file.
+*.bin binary
+*.zip binary
+*.pdf binary
+*.rar binary

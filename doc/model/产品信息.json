@@ -1,0 +1,696 @@
+{
+  "schema": "https://iotx-tsl.oss-ap-southeast-1.aliyuncs.com/schema.json",
+  "profile": {
+    "version": "1.0",
+    "productKey": "k12xgT6mw7H"
+  },
+  "properties": [
+    {
+      "identifier": "IMSI",
+      "name": "SIM卡IMSI",
+      "accessMode": "r",
+      "desc": "SIM卡IMSI",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "32"
+        }
+      }
+    },
+    {
+      "identifier": "ICCID",
+      "name": "SIM卡ICCID",
+      "accessMode": "r",
+      "desc": "SIM卡ICCID",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "32"
+        }
+      }
+    },
+    {
+      "identifier": "CollectorID",
+      "name": "基站编号",
+      "accessMode": "r",
+      "desc": "详见《发情监测管理系统Hardware Protocol》。",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "32"
+        }
+      }
+    },
+    {
+      "identifier": "AppVersion",
+      "name": "应用版本",
+      "accessMode": "r",
+      "desc": "Collector QuecPython应用版本。",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "16"
+        }
+      }
+    },
+    {
+      "identifier": "NetStatus",
+      "name": "网络状态",
+      "accessMode": "r",
+      "desc": "详细说明见QuecPython库checknet.wait_network_connected(timeout)。",
+      "required": false,
+      "dataType": {
+        "type": "struct",
+        "specs": [
+          {
+            "identifier": "StageCode",
+            "name": "阶段码",
+            "dataType": {
+              "type": "int",
+              "specs": {
+                "min": "0",
+                "max": "7",
+                "step": "1"
+              }
+            }
+          },
+          {
+            "identifier": "SubCode",
+            "name": "子码",
+            "dataType": {
+              "type": "int",
+              "specs": {
+                "min": "0",
+                "max": "31",
+                "step": "1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "identifier": "SendCommand",
+      "name": "命令下发",
+      "accessMode": "rw",
+      "desc": "兼容保留字段。本版本收到后仅确认并记录，不执行业务动作、不转发UART。",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "1024"
+        }
+      }
+    },
+    {
+      "identifier": "StatusInfo",
+      "name": "状态信息",
+      "accessMode": "r",
+      "desc": "详见《发情监测管理系统Hardware Protocol》。",
+      "required": false,
+      "dataType": {
+        "type": "text",
+        "specs": {
+          "length": "1024"
+        }
+      }
+    },
+    {
+      "identifier": "EthernetStatus",
+      "name": "以太网状态",
+      "accessMode": "r",
+      "required": false,
+      "desc": "兼容保留字段，EC600M 4.0.0版本不使用以太网接口。",
+      "dataType": {
+        "type": "struct",
+        "specs": [
+          {
+            "identifier": "IPAddress",
+            "name": "IP地址",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "Netmask",
+            "name": "子网掩码",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "Gateway",
+            "name": "网关",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "MACAddress",
+            "name": "MAC地址",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "32"
+              }
+            }
+          },
+          {
+            "identifier": "NetworkInterface",
+            "name": "网络接口状态",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "Hostname",
+            "name": "主机名",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "PrimaryDNS",
+            "name": "主DNS",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "BackupDNS",
+            "name": "备用DNS",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "16"
+              }
+            }
+          },
+          {
+            "identifier": "FreeHeap",
+            "name": "空闲堆内存",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "32"
+              }
+            }
+          },
+          {
+            "identifier": "MinimumFreeHeap",
+            "name": "最小空闲堆内存",
+            "dataType": {
+              "type": "text",
+              "specs": {
+                "length": "32"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "identifier": "post",
+      "name": "post",
+      "type": "info",
+      "required": true,
+      "desc": "属性上报",
+      "method": "thing.event.property.post",
+      "outputData": [
+        {
+          "identifier": "IMSI",
+          "name": "SIM卡IMSI",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "ICCID",
+          "name": "SIM卡ICCID",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "CollectorID",
+          "name": "基站编号",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "AppVersion",
+          "name": "应用版本",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "16"
+            }
+          }
+        },
+        {
+          "identifier": "NetStatus",
+          "name": "网络状态",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "StageCode",
+                "name": "阶段码",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "7",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "SubCode",
+                "name": "子码",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "31",
+                    "step": "1"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "identifier": "SendCommand",
+          "name": "命令下发",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "1024"
+            }
+          }
+        },
+        {
+          "identifier": "StatusInfo",
+          "name": "状态信息",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "1024"
+            }
+          }
+        },
+        {
+          "identifier": "EthernetStatus",
+          "name": "以太网状态",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "IPAddress",
+                "name": "IP地址",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Netmask",
+                "name": "子网掩码",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Gateway",
+                "name": "网关",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "MACAddress",
+                "name": "MAC地址",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "NetworkInterface",
+                "name": "网络接口状态",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Hostname",
+                "name": "主机名",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "PrimaryDNS",
+                "name": "主DNS",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "BackupDNS",
+                "name": "备用DNS",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "FreeHeap",
+                "name": "空闲堆内存",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "MinimumFreeHeap",
+                "name": "最小空闲堆内存",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "identifier": "set",
+      "name": "set",
+      "required": true,
+      "callType": "async",
+      "desc": "属性设置",
+      "method": "thing.service.property.set",
+      "inputData": [
+        {
+          "identifier": "SendCommand",
+          "name": "命令下发",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "1024"
+            }
+          }
+        }
+      ],
+      "outputData": []
+    },
+    {
+      "identifier": "get",
+      "name": "get",
+      "required": true,
+      "callType": "async",
+      "desc": "属性获取",
+      "method": "thing.service.property.get",
+      "inputData": [
+        "IMSI",
+        "ICCID",
+        "CollectorID",
+        "AppVersion",
+        "NetStatus",
+        "SendCommand",
+        "StatusInfo",
+        "EthernetStatus"
+      ],
+      "outputData": [
+        {
+          "identifier": "IMSI",
+          "name": "SIM卡IMSI",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "ICCID",
+          "name": "SIM卡ICCID",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "CollectorID",
+          "name": "基站编号",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "32"
+            }
+          }
+        },
+        {
+          "identifier": "AppVersion",
+          "name": "应用版本",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "16"
+            }
+          }
+        },
+        {
+          "identifier": "NetStatus",
+          "name": "网络状态",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "StageCode",
+                "name": "阶段码",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "7",
+                    "step": "1"
+                  }
+                }
+              },
+              {
+                "identifier": "SubCode",
+                "name": "子码",
+                "dataType": {
+                  "type": "int",
+                  "specs": {
+                    "min": "0",
+                    "max": "31",
+                    "step": "1"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "identifier": "SendCommand",
+          "name": "命令下发",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "1024"
+            }
+          }
+        },
+        {
+          "identifier": "StatusInfo",
+          "name": "状态信息",
+          "dataType": {
+            "type": "text",
+            "specs": {
+              "length": "1024"
+            }
+          }
+        },
+        {
+          "identifier": "EthernetStatus",
+          "name": "以太网状态",
+          "dataType": {
+            "type": "struct",
+            "specs": [
+              {
+                "identifier": "IPAddress",
+                "name": "IP地址",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Netmask",
+                "name": "子网掩码",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Gateway",
+                "name": "网关",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "MACAddress",
+                "name": "MAC地址",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "NetworkInterface",
+                "name": "网络接口状态",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "Hostname",
+                "name": "主机名",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "PrimaryDNS",
+                "name": "主DNS",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "BackupDNS",
+                "name": "备用DNS",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "16"
+                  }
+                }
+              },
+              {
+                "identifier": "FreeHeap",
+                "name": "空闲堆内存",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              },
+              {
+                "identifier": "MinimumFreeHeap",
+                "name": "最小空闲堆内存",
+                "dataType": {
+                  "type": "text",
+                  "specs": {
+                    "length": "32"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "functionBlockId": "product_information",
+  "functionBlockName": "产品信息"
+}

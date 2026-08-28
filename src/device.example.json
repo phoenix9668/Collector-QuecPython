@@ -1,0 +1,13 @@
+{
+  "productKey": "YOUR_PRODUCT_KEY",
+  "deviceName": "YOUR_DEVICE_NAME",
+  "mqttServer": "YOUR_INSTANCE_ID.mqtt.iothub.aliyuncs.com",
+  "mqttPort": 1883,
+  "deviceSecret": "",
+  "productSecret": "",
+  "otaAllowedHosts": [
+    ".aliyuncs.com",
+    ".aliyun.com"
+  ],
+  "cellLocatorToken": ""
+}
