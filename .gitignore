@@ -83,6 +83,9 @@ fabric.properties
 __pycache__/
 *.py[cod]
 
+# Per-device Aliyun credentials (copy device.example.json locally)
+/src/device.json
+
 # Local editor and accidentally mirrored machine paths
 /.vscode/
 /Users/

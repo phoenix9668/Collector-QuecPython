@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.2`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.3`。
 
 ## 主要能力
 
@@ -29,6 +29,8 @@
 3. 将 `doc/model.zip` 导入对应阿里云产品物模型。
 4. 重启设备。设备会先建立 `/usr/.ota_space.reserve`，随后按剩余空间创建体征Flash队列。
 
+使用QPYcom的 `example.exec('/usr/main.py')` 手动启动也受支持；启动器会主动切换到 `/usr` 并加入模块搜索路径。
+
 `SendCommand`仅为兼容保留。设备收到设置请求会回复成功并记录runtimeLog，但不会向UART发送任何内容。
 
 `runtimeLog`的数值字段使用 `metricValue`。QH-D200模型中的原字段名 `value` 是阿里云物模型保留标识符，不能用于快速导入；构建脚本会在打包前检查全部自定义标识符。
@@ -43,7 +45,7 @@ python tools/build_ota_package.py
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
-物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出位于 `dist/collector_app_4.0.2/`；构建会按每个文件4 KiB、目录8 KiB计入占用，超过512 KiB时失败。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
+物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出位于 `dist/collector_app_4.0.3/`；构建会按每个文件4 KiB、目录8 KiB计入占用，超过512 KiB时失败。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
 
 ## 投递边界
 

@@ -14,7 +14,8 @@ from build_ota_package import MAX_ALIGNED_BYTES, build  # noqa: E402
 
 class BuildTests(unittest.TestCase):
     def test_stable_bootstrap_has_a_health_deadline_before_confirmation(self):
-        main_tree = ast.parse((ROOT / "src" / "main.py").read_text(encoding="utf-8"))
+        main_source = (ROOT / "src" / "main.py").read_text(encoding="utf-8")
+        main_tree = ast.parse(main_source)
         config_tree = ast.parse(
             (ROOT / "src" / "collector_config.py").read_text(encoding="utf-8")
         )
@@ -47,6 +48,21 @@ class BuildTests(unittest.TestCase):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         }
         self.assertTrue({"_load_pending", "_restore", "_restart"} <= calls)
+
+        prepare = next(
+            node
+            for node in main_tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_prepare_import_path"
+        )
+        attributes = {
+            node.attr for node in ast.walk(prepare) if isinstance(node, ast.Attribute)
+        }
+        self.assertIn("chdir", attributes)
+        self.assertIn("path", attributes)
+        self.assertLess(
+            main_source.rfind("_prepare_import_path()"),
+            main_source.find("from collector_app import run"),
+        )
 
     def test_ota_build_manifest_matches_generated_files(self):
         with tempfile.TemporaryDirectory() as directory:
