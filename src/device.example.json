@@ -8,6 +8,5 @@
   "otaAllowedHosts": [
     ".aliyuncs.com",
     ".aliyun.com"
-  ],
-  "cellLocatorToken": ""
+  ]
 }

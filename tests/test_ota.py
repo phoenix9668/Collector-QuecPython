@@ -94,6 +94,8 @@ class OtaTests(unittest.TestCase):
         self.assertFalse(safe_target_path("/usr/main.py"))
         self.assertFalse(safe_target_path("/usr/unrelated.py"))
         self.assertFalse(safe_target_path("/usr/collector_config.json"))
+        self.assertFalse(safe_target_path("/usr/device.json"))
+        self.assertFalse(safe_target_path("/usr/device_secret.json"))
         self.assertFalse(safe_target_path("/usr/data/signs.queue"))
         self.assertFalse(safe_target_path("/usr/.updater/collector_app.py"))
         self.assertFalse(safe_target_path("/usr/../etc/passwd"))

@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from collector_config import (  # noqa: E402
+    DEVICE_CONFIG_FILE,
+    DEVICE_SECRET_CACHE_FILE,
     DeviceConfig,
     clear_cached_device_secret,
     load_cached_device_secret,
@@ -51,6 +53,14 @@ class ConfigTests(unittest.TestCase):
             )
             self.assertTrue(clear_cached_device_secret(path))
             self.assertEqual(load_cached_device_secret(config, path), "")
+
+    def test_device_files_live_directly_under_usr(self):
+        self.assertEqual(DEVICE_CONFIG_FILE, "/usr/device.json")
+        self.assertEqual(DEVICE_SECRET_CACHE_FILE, "/usr/device_secret.json")
+        example = json.loads(
+            (ROOT / "src" / "device.example.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("cellLocatorToken", example)
 
     def test_identity_rejects_topic_wildcards(self):
         with self.assertRaises(ValueError):
