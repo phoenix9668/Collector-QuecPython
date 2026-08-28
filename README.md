@@ -17,6 +17,8 @@
 - `src/collector_*.py`：配置、UART、队列、云连接、OTA、日志和传感器模块。
 - `src/device.example.json`：设备配置模板。
 - `doc/model.zip`：可直接导入阿里云的物模型；`doc/model/`为可编辑源文件。
+- `doc/Hardware Protocol-Collector Hardware Send Protocol.png`：Collector硬件通信协议图。
+- `fw/QPY_OCPU_EC600M_CNLE_FW_V0006/`：当前EC600M-CN-LE V0606固件及版本说明，根目录同时保留完整压缩包。
 - `tools/build_ota_package.py`：生成多文件及旧版单文件OTA制品和MD5清单。
 - `tests/`：主机协议、队列、OTA、云确认及物模型测试。
 
