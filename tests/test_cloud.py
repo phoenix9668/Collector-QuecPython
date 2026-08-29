@@ -73,6 +73,23 @@ class CloudAckTests(unittest.TestCase):
         expected = hmac.new(b"secret", b"content", hashlib.sha256).hexdigest()
         self.assertEqual(hmac_sha256_hex("secret", "content"), expected)
 
+    def test_hmac_does_not_require_mutable_bytearray(self):
+        original = hmac_sha256_hex.__globals__.get("bytearray")
+
+        class RejectedBytearray:
+            def __init__(self, *_args, **_kwargs):
+                raise TypeError("bytearray mutation is unavailable")
+
+        hmac_sha256_hex.__globals__["bytearray"] = RejectedBytearray
+        try:
+            expected = hmac.new(b"secret", b"content", hashlib.sha256).hexdigest()
+            self.assertEqual(hmac_sha256_hex("secret", "content"), expected)
+        finally:
+            if original is None:
+                hmac_sha256_hex.__globals__.pop("bytearray", None)
+            else:
+                hmac_sha256_hex.__globals__["bytearray"] = original
+
     def make_cloud(self, temp):
         config = DeviceConfig(
             {
