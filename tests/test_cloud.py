@@ -3,6 +3,7 @@ import json
 import hashlib
 import hmac
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from collector_cloud import CloudClient, hmac_sha256_hex, ticks_ms  # noqa: E402
+from collector_cloud import (  # noqa: E402
+    CloudClient,
+    _load_mqtt_client,
+    hmac_sha256_hex,
+    ticks_ms,
+)
 from collector_config import DeviceConfig  # noqa: E402
 from collector_queue import DeliveryStore, RawFrameQueue, SequenceCounter  # noqa: E402
 
@@ -29,6 +35,36 @@ def signs_frame(value):
 
 
 class CloudAckTests(unittest.TestCase):
+    def test_umqtt_loader_patches_reduced_log_and_discards_partial_import(self):
+        with tempfile.TemporaryDirectory() as temp:
+            module_path = Path(temp) / "umqtt.py"
+            module_path.write_text(
+                "import log\n"
+                "log.basicConfig(level=log.INFO)\n"
+                "class MQTTClient:\n"
+                "    pass\n",
+                encoding="utf-8",
+            )
+            fake_log = types.ModuleType("log")
+            fake_log.INFO = 20
+            old_log = sys.modules.get("log")
+            old_umqtt = sys.modules.get("umqtt")
+            sys.modules["log"] = fake_log
+            sys.modules["umqtt"] = types.ModuleType("umqtt")
+            sys.path.insert(0, temp)
+            try:
+                mqtt_client = _load_mqtt_client()
+                self.assertEqual(mqtt_client.__name__, "MQTTClient")
+                self.assertTrue(hasattr(fake_log, "basicConfig"))
+            finally:
+                sys.path.remove(temp)
+                sys.modules.pop("umqtt", None)
+                sys.modules.pop("log", None)
+                if old_log is not None:
+                    sys.modules["log"] = old_log
+                if old_umqtt is not None:
+                    sys.modules["umqtt"] = old_umqtt
+
     def test_hmac_sha256_matches_standard_library(self):
         expected = hmac.new(b"secret", b"content", hashlib.sha256).hexdigest()
         self.assertEqual(hmac_sha256_hex("secret", "content"), expected)
@@ -148,6 +184,21 @@ class CloudAckTests(unittest.TestCase):
             self.assertEqual(cloud.stats()["deferred"], 0)
             payload = json.loads(published[-1][1])
             self.assertEqual(payload["params"]["BatteryVoltage"]["value"], 12.3)
+
+    def test_publish_raw_passes_qos_without_enabling_retain(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, _delivery, _published = self.make_cloud(temp)
+            calls = []
+
+            class FakeMqttClient:
+                def publish(self, topic, payload, retain=False, qos=0):
+                    calls.append((topic, payload, retain, qos))
+
+            cloud.publish_raw = CloudClient.publish_raw.__get__(cloud, CloudClient)
+            cloud.client = FakeMqttClient()
+            cloud.connected = True
+            self.assertTrue(cloud.publish_raw("topic", "payload", qos=1))
+            self.assertEqual(calls, [(b"topic", b"payload", False, 1)])
 
 
 if __name__ == "__main__":
