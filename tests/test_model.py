@@ -68,6 +68,24 @@ class ModelTests(unittest.TestCase):
                 "UTCtime",
             ],
         )
+        fields = {
+            item["identifier"]: item["dataType"]
+            for item in signs["dataType"]["specs"]
+        }
+        self.assertEqual(fields["CollectorID"]["specs"]["length"], "12")
+        self.assertEqual(fields["RFID"]["specs"]["length"], "18")
+        self.assertEqual(fields["GUID"]["specs"]["length"], "96")
+        for identifier in (
+            "restArray",
+            "ingestionArray",
+            "movementArray",
+            "climbArray",
+            "ruminateArray",
+            "otherArray",
+        ):
+            self.assertEqual(fields[identifier]["specs"]["length"], "72")
+        self.assertEqual(fields["SignalStrength"]["type"], "float")
+        self.assertEqual(fields["SignalStrength"]["specs"]["step"], "0.5")
 
     def test_reserved_identifier_is_rejected_before_archive_is_written(self):
         invalid = {

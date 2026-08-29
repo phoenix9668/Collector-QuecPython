@@ -19,7 +19,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "4"
+                "length": "12"
               }
             }
           },
@@ -29,7 +29,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "6"
+                "length": "18"
               }
             }
           },
@@ -39,7 +39,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "32"
+                "length": "96"
               }
             }
           },
@@ -49,7 +49,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -59,7 +59,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -69,7 +69,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -79,7 +79,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -89,7 +89,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -99,7 +99,7 @@
             "dataType": {
               "type": "text",
               "specs": {
-                "length": "24"
+                "length": "72"
               }
             }
           },
@@ -147,13 +147,13 @@
             "identifier": "SignalStrength",
             "name": "项圈信号强度",
             "dataType": {
-              "type": "int",
+              "type": "float",
               "specs": {
                 "min": "-120",
                 "max": "0",
                 "unit": "dB",
                 "unitName": "分贝",
-                "step": "1"
+                "step": "0.5"
               }
             }
           },
@@ -190,7 +190,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "4"
+                    "length": "12"
                   }
                 }
               },
@@ -200,7 +200,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "6"
+                    "length": "18"
                   }
                 }
               },
@@ -210,7 +210,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "32"
+                    "length": "96"
                   }
                 }
               },
@@ -220,7 +220,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -230,7 +230,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -240,7 +240,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -250,7 +250,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -260,7 +260,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -270,7 +270,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -318,13 +318,13 @@
                 "identifier": "SignalStrength",
                 "name": "项圈信号强度",
                 "dataType": {
-                  "type": "int",
+                  "type": "float",
                   "specs": {
                     "min": "-120",
                     "max": "0",
                     "unit": "dB",
                     "unitName": "分贝",
-                    "step": "1"
+                    "step": "0.5"
                   }
                 }
               },
@@ -376,7 +376,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "4"
+                    "length": "12"
                   }
                 }
               },
@@ -386,7 +386,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "6"
+                    "length": "18"
                   }
                 }
               },
@@ -396,7 +396,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "32"
+                    "length": "96"
                   }
                 }
               },
@@ -406,7 +406,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -416,7 +416,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -426,7 +426,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -436,7 +436,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -446,7 +446,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -456,7 +456,7 @@
                 "dataType": {
                   "type": "text",
                   "specs": {
-                    "length": "24"
+                    "length": "72"
                   }
                 }
               },
@@ -504,13 +504,13 @@
                 "identifier": "SignalStrength",
                 "name": "项圈信号强度",
                 "dataType": {
-                  "type": "int",
+                  "type": "float",
                   "specs": {
                     "min": "-120",
                     "max": "0",
                     "unit": "dB",
                     "unitName": "分贝",
-                    "step": "1"
+                    "step": "0.5"
                   }
                 }
               },

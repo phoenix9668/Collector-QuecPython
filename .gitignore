@@ -85,6 +85,7 @@ __pycache__/
 
 # Per-device Aliyun credentials (copy device.example.json locally)
 /src/device.json
+/src/data/
 
 # Local editor and accidentally mirrored machine paths
 /.vscode/

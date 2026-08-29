@@ -123,6 +123,7 @@ class CloudAckTests(unittest.TestCase):
             cloud._handle_property_reply({"id": "0", "code": 200})
             self.assertEqual(delivery.ram.depth(), 0)
             self.assertEqual(cloud.stats()["inflight"], 0)
+            self.assertEqual(cloud.stats()["post_reply_success"], 2)
 
     def test_timeout_reuses_the_exact_message_id_and_payload(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -145,6 +146,17 @@ class CloudAckTests(unittest.TestCase):
             cloud._handle_property_reply({"id": "0", "code": 500})
             self.assertEqual(delivery.ram.depth(), 1)
             self.assertEqual(cloud.stats()["inflight"], 1)
+            cloud._handle_property_reply(
+                {
+                    "id": "0",
+                    "code": 200,
+                    "message": "success",
+                    "data": {"SignsData": "6311: tsl parse failed"},
+                }
+            )
+            self.assertEqual(delivery.ram.depth(), 1)
+            self.assertEqual(cloud.stats()["inflight"], 1)
+            self.assertEqual(cloud.stats()["post_reply_rejected"], 2)
             cloud._handle_property_reply({"id": "0", "code": 200})
             self.assertEqual(delivery.ram.depth(), 0)
             cloud._handle_property_reply({"id": "0", "code": 200})
@@ -191,9 +203,35 @@ class CloudAckTests(unittest.TestCase):
             cloud.connected = True
             for value in range(20):
                 self.assertTrue(delivery.accept(signs_frame(value), 1000 + value))
-            cloud._delivery_cycle()
+            for _ in range(16):
+                cloud.last_signs_publish_ms = None
+                cloud._delivery_cycle()
             self.assertEqual(cloud.stats()["inflight"], 16)
             self.assertEqual(delivery.ram.depth(), 20)
+
+    def test_signs_use_alink_reply_ack_with_nonblocking_mqtt_transport(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, delivery, published = self.make_cloud(temp)
+            self.assertTrue(delivery.accept(signs_frame(6), 1000))
+            record = delivery.next_record({})
+            self.assertTrue(cloud._send_record(record))
+            self.assertEqual(published[-1][2], 0)
+            self.assertEqual(delivery.ram.depth(), 1)
+            cloud._handle_property_reply({"id": "0", "code": 200, "data": {}})
+            self.assertEqual(delivery.ram.depth(), 0)
+
+    def test_delivery_cycle_obeys_signs_publish_interval(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, delivery, published = self.make_cloud(temp)
+            cloud.connected = True
+            self.assertTrue(delivery.accept(signs_frame(7), 1000))
+            cloud.last_signs_publish_ms = ticks_ms()
+            cloud._delivery_cycle()
+            self.assertEqual(published, [])
+            self.assertEqual(cloud.stats()["inflight"], 0)
+            cloud.last_signs_publish_ms = None
+            cloud._delivery_cycle()
+            self.assertEqual(len(published), 1)
 
     def test_uart_auxiliary_properties_are_published_by_delivery_cycle(self):
         with tempfile.TemporaryDirectory() as temp:

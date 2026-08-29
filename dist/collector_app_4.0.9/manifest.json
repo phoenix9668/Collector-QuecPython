@@ -1,0 +1,85 @@
+{
+  "module": "collector_app",
+  "version": "4.0.9",
+  "signMethod": "MD5",
+  "alignedBytes": 176128,
+  "fileAlignedBytes": 167936,
+  "directoryBytes": 8192,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 389120,
+  "files": [
+    {
+      "fileName": "collector_app.py.bin",
+      "fileSize": 13649,
+      "fileMd5": "e419906886a9cd890beef3e60984290b",
+      "signMethod": "MD5",
+      "target": "/usr/collector_app.py"
+    },
+    {
+      "fileName": "collector_cloud.py.bin",
+      "fileSize": 29825,
+      "fileMd5": "9d64bf9f50120d15297721a287a3a2f4",
+      "signMethod": "MD5",
+      "target": "/usr/collector_cloud.py"
+    },
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 7829,
+      "fileMd5": "2e00020477a33ff22076fc0dacaa95f4",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py"
+    },
+    {
+      "fileName": "collector_log.py.bin",
+      "fileSize": 9852,
+      "fileMd5": "0c8157c42cdfbcb655e9eaa2bf4a0366",
+      "signMethod": "MD5",
+      "target": "/usr/collector_log.py"
+    },
+    {
+      "fileName": "collector_ota.py.bin",
+      "fileSize": 35245,
+      "fileMd5": "75576297a312c4e04529bed1f10efc18",
+      "signMethod": "MD5",
+      "target": "/usr/collector_ota.py"
+    },
+    {
+      "fileName": "collector_protocol.py.bin",
+      "fileSize": 9216,
+      "fileMd5": "09a05f142d78ce08161b53688f42b26c",
+      "signMethod": "MD5",
+      "target": "/usr/collector_protocol.py"
+    },
+    {
+      "fileName": "collector_queue.py.bin",
+      "fileSize": 32261,
+      "fileMd5": "8d350bb1f7732e4509f9317914b794a4",
+      "signMethod": "MD5",
+      "target": "/usr/collector_queue.py"
+    },
+    {
+      "fileName": "collector_sensors.py.bin",
+      "fileSize": 8160,
+      "fileMd5": "69bf712c5434b83be67ff5ad87b7915c",
+      "signMethod": "MD5",
+      "target": "/usr/collector_sensors.py"
+    },
+    {
+      "fileName": "collector_uart.py.bin",
+      "fileSize": 5188,
+      "fileMd5": "e86b999aa17de439d6b05d0a5bd73277",
+      "signMethod": "MD5",
+      "target": "/usr/collector_uart.py"
+    }
+  ],
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_app.py.bin\": \"/usr/collector_app.py\", \"collector_cloud.py.bin\": \"/usr/collector_cloud.py\", \"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_log.py.bin\": \"/usr/collector_log.py\", \"collector_ota.py.bin\": \"/usr/collector_ota.py\", \"collector_protocol.py.bin\": \"/usr/collector_protocol.py\", \"collector_queue.py.bin\": \"/usr/collector_queue.py\", \"collector_sensors.py.bin\": \"/usr/collector_sensors.py\", \"collector_uart.py.bin\": \"/usr/collector_uart.py\"}}"
+  },
+  "legacy": {
+    "fileName": "main.py.bin",
+    "fileSize": 4831,
+    "fileMd5": "c980a7cf6466109e789810bacaba3455",
+    "signMethod": "MD5",
+    "target": "/usr/main.py"
+  }
+}
