@@ -41,12 +41,14 @@ class CloudAckTests(unittest.TestCase):
             module_path.write_text(
                 "import log\n"
                 "log.basicConfig(level=log.INFO)\n"
+                "mqtt_log = log.getLogger('MQTT')\n"
+                "mqtt_log.info('ready')\n"
+                "mqtt_log.warning('warning')\n"
                 "class MQTTClient:\n"
                 "    pass\n",
                 encoding="utf-8",
             )
             fake_log = types.ModuleType("log")
-            fake_log.INFO = 20
             old_log = sys.modules.get("log")
             old_umqtt = sys.modules.get("umqtt")
             sys.modules["log"] = fake_log
@@ -56,6 +58,8 @@ class CloudAckTests(unittest.TestCase):
                 mqtt_client = _load_mqtt_client()
                 self.assertEqual(mqtt_client.__name__, "MQTTClient")
                 self.assertTrue(hasattr(fake_log, "basicConfig"))
+                self.assertEqual(fake_log.INFO, 20)
+                self.assertTrue(hasattr(fake_log, "getLogger"))
             finally:
                 sys.path.remove(temp)
                 sys.modules.pop("umqtt", None)
