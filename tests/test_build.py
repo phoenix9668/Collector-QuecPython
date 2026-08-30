@@ -81,6 +81,8 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(FLASH_SPOOL_MAX_BYTES, 96 * 1024)
             self.assertEqual(LOCAL_LOG_TOTAL_BYTES, 16 * 1024)
             self.assertEqual(manifest["directoryBytes"], 8192)
+            self.assertFalse(manifest["changedFilesOnly"])
+            self.assertIsNone(manifest["baseVersion"])
             self.assertEqual(manifest["signMethod"], "MD5")
             self.assertEqual(
                 manifest["selfUpdateRequiredBytes"],
@@ -100,6 +102,29 @@ class BuildTests(unittest.TestCase):
                     hashlib.md5(artifact.read_bytes()).hexdigest(), item["fileMd5"]
                 )
                 self.assertEqual(item["signMethod"], "MD5")
+
+    def test_incremental_build_omits_unchanged_modules_and_fits_device(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "release"
+            manifest = build(output, "4.0.9")
+            self.assertTrue(manifest["changedFilesOnly"])
+            self.assertEqual(manifest["baseVersion"], "4.0.9")
+            self.assertEqual(
+                [item["fileName"] for item in manifest["files"]],
+                [
+                    "collector_app.py.bin",
+                    "collector_cloud.py.bin",
+                    "collector_config.py.bin",
+                    "collector_protocol.py.bin",
+                    "collector_uart.py.bin",
+                ],
+            )
+            self.assertEqual(manifest["alignedBytes"], 88 * 1024)
+            self.assertEqual(manifest["backupAlignedBytes"], 84 * 1024)
+            self.assertEqual(manifest["selfUpdateRequiredBytes"], 208 * 1024)
+            self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
+            self.assertNotIn("legacy", manifest)
+            self.assertFalse((output / "main.py.bin").exists())
 
 
 if __name__ == "__main__":
