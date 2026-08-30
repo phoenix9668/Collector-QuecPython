@@ -183,6 +183,20 @@ class CloudAckTests(unittest.TestCase):
             self.assertEqual(payload["params"]["value"], {"seq": 7})
             self.assertIsInstance(payload["params"]["time"], int)
 
+    def test_auxiliary_property_reply_is_not_counted_as_unmatched_signs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, _delivery, published = self.make_cloud(temp)
+            self.assertTrue(cloud.publish_properties({"BatteryVoltage": 12.3}))
+            message_id = json.loads(published[-1][1])["id"]
+            cloud._handle_property_reply(
+                {"id": message_id, "code": 200, "data": {}}
+            )
+            self.assertEqual(cloud.stats()["post_reply_unmatched"], 0)
+            cloud._handle_property_reply(
+                {"id": "4294967295", "code": 200, "data": {}}
+            )
+            self.assertEqual(cloud.stats()["post_reply_unmatched"], 1)
+
     def test_delivery_cycle_limits_unconfirmed_messages_to_sixteen(self):
         with tempfile.TemporaryDirectory() as temp:
             config = DeviceConfig(

@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.9`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.10`。
 
 ## 主要能力
 
@@ -45,7 +45,7 @@ python tools/build_ota_package.py
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
-物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出位于 `dist/collector_app_4.0.9/`；构建会按每个文件4 KiB、目录8 KiB计入占用，完整应用上限为176 KiB，并在清单写入完整自升级所需空间。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
+物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出位于 `dist/collector_app_4.0.10/`；构建会按每个文件4 KiB、目录8 KiB计入占用，完整应用上限为176 KiB，并在清单写入完整自升级所需空间。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
 
 ## 投递边界
 

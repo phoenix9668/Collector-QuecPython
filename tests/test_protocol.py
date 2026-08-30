@@ -1,3 +1,4 @@
+import builtins
 import random
 import sys
 import time
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from collector_protocol import (  # noqa: E402
+    ByteRing,
     FrameStream,
     decode_signs_frame,
     legacy_hex,
@@ -26,6 +28,38 @@ def make_frame(sequence):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_read_only_bytearray_firmware_uses_segment_ring(self):
+        module_globals = ByteRing.__init__.__globals__
+        original_bytearray = module_globals.get("bytearray")
+
+        class ReadOnlyBytearray(builtins.bytearray):
+            def __setitem__(self, _key, _value):
+                raise TypeError("bytearray object doesn't support item assignment")
+
+        module_globals["bytearray"] = ReadOnlyBytearray
+        try:
+            stream = FrameStream(32768)
+        finally:
+            if original_bytearray is None:
+                module_globals.pop("bytearray", None)
+            else:
+                module_globals["bytearray"] = original_bytearray
+
+        self.assertEqual(stream.ring.storage_mode, "segments")
+        received = []
+        source = make_frame(41) + make_frame(42)
+        for offset in range(0, len(source), 17):
+            chunk = source[offset : offset + 17]
+            self.assertEqual(stream.feed(chunk), len(chunk))
+        stream.drain(
+            lambda frame, _timestamp: received.append(
+                int.from_bytes(frame[193:197], "big")
+            )
+        )
+        self.assertEqual(received, [41, 42])
+        self.assertEqual(stream.stats()["ring_depth"], 0)
+        self.assertEqual(stream.stats()["rx_overflow_bytes"], 0)
+
     def test_legacy_hex_format_is_unchanged(self):
         self.assertEqual(legacy_hex(bytes([0x0B, 0x31, 0, 0xAF])), " b 31 0 af")
 

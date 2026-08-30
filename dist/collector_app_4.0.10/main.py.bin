@@ -1,0 +1,196 @@
+"""Stable EC600M bootstrap for Collector application 4.x.
+
+Multi-file OTA intentionally does not replace this file, allowing a failed
+application import to restore the previous version.
+"""
+
+import ujson
+import uos
+import utime
+import _thread
+import sys
+
+APP_ROOT = "/usr"
+PENDING_FILE = "/usr/.ota_pending.json"
+HEALTH_FILE = "/usr/.ota_healthy"
+HEALTH_DEADLINE_SECONDS = 120
+
+
+def _prepare_import_path():
+    """Make sibling application modules importable under boot and example.exec."""
+    try:
+        uos.chdir(APP_ROOT)
+    except Exception:
+        pass
+    try:
+        if APP_ROOT not in sys.path:
+            sys.path.insert(0, APP_ROOT)
+    except Exception:
+        pass
+
+
+def _exists(path):
+    try:
+        uos.stat(path)
+        return True
+    except Exception:
+        return False
+
+
+def _copy(source, target):
+    try:
+        with open(source, "rb") as reader:
+            with open(target, "wb") as writer:
+                while True:
+                    data = reader.read(1024)
+                    if not data:
+                        break
+                    writer.write(data)
+        return True
+    except Exception:
+        return False
+
+
+def _size(path):
+    try:
+        return int(uos.stat(path)[6])
+    except Exception:
+        return -1
+
+
+def _replace(source, target):
+    temporary = target + ".rollback"
+    try:
+        uos.remove(temporary)
+    except Exception:
+        pass
+    if not _copy(source, temporary) or _size(source) != _size(temporary):
+        return False
+    try:
+        uos.remove(target)
+    except Exception:
+        pass
+    try:
+        uos.rename(temporary, target)
+        return True
+    except Exception:
+        restored = _copy(source, target) and _size(source) == _size(target)
+        if restored:
+            try:
+                uos.remove(temporary)
+            except Exception:
+                pass
+        return restored
+
+
+def _load_pending():
+    best = None
+    for path in (PENDING_FILE, PENDING_FILE + ".tmp"):
+        try:
+            with open(path, "r") as stream:
+                value = ujson.loads(stream.read())
+            if best is None or int(value.get("attempts", 0)) > int(
+                best.get("attempts", 0)
+            ):
+                best = value
+        except Exception:
+            pass
+    return best
+
+
+def _save_pending(data):
+    temp = PENDING_FILE + ".tmp"
+    with open(temp, "w") as stream:
+        stream.write(ujson.dumps(data))
+    try:
+        uos.remove(PENDING_FILE)
+    except Exception:
+        pass
+    uos.rename(temp, PENDING_FILE)
+
+
+def _restore(pending):
+    restored = True
+    for item in pending.get("backups", []):
+        if item.get("created"):
+            target = item.get("target", "")
+            if target and _exists(target):
+                try:
+                    uos.remove(target)
+                except Exception:
+                    restored = False
+            continue
+        if not _replace(item.get("backup", ""), item.get("target", "")):
+            restored = False
+    if restored:
+        for path in (PENDING_FILE, PENDING_FILE + ".tmp"):
+            try:
+                uos.remove(path)
+            except Exception:
+                pass
+        try:
+            uos.remove(HEALTH_FILE)
+        except Exception:
+            pass
+    return restored
+
+
+def _restart():
+    try:
+        from misc import Power
+
+        Power.powerRestart()
+    except Exception:
+        while True:
+            utime.sleep(60)
+
+
+def _health_watchdog():
+    """Rollback an update that stays alive but never becomes healthy."""
+    utime.sleep(HEALTH_DEADLINE_SECONDS)
+    current = _load_pending()
+    if not current or _exists(HEALTH_FILE):
+        return
+    if _restore(current):
+        _restart()
+    try:
+        print("Collector OTA rollback failed; pending metadata retained")
+    except Exception:
+        pass
+
+
+_prepare_import_path()
+
+pending = _load_pending()
+if pending:
+    if _exists(HEALTH_FILE):
+        for path in (PENDING_FILE, PENDING_FILE + ".tmp"):
+            try:
+                uos.remove(path)
+            except Exception:
+                pass
+        pending = None
+    elif int(pending.get("attempts", 0)) >= 1:
+        _restore(pending)
+        _restart()
+    else:
+        pending["attempts"] = 1
+        _save_pending(pending)
+        try:
+            _thread.start_new_thread(_health_watchdog, ())
+        except Exception:
+            # The application needs several workers itself. If even the
+            # rollback guard cannot start, keep the known-good version.
+            if _restore(pending):
+                _restart()
+
+try:
+    from collector_app import run
+
+    run()
+except Exception as error:
+    print("Collector boot failed: {}".format(error))
+    pending = _load_pending()
+    if pending and _restore(pending):
+        _restart()
+    raise
