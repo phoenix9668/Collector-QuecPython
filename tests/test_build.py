@@ -1,5 +1,6 @@
 import ast
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -74,27 +75,22 @@ class BuildTests(unittest.TestCase):
     def test_ota_build_manifest_matches_generated_files(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release"
-            manifest = build(output)
+            manifest = build(output, "4.0.12")
             self.assertLessEqual(manifest["alignedBytes"], MAX_ALIGNED_BYTES)
             self.assertEqual(MAX_ALIGNED_BYTES, 176 * 1024)
             self.assertEqual(OTA_RESERVED_BYTES, 256 * 1024)
             self.assertEqual(FLASH_SPOOL_MAX_BYTES, 96 * 1024)
             self.assertEqual(LOCAL_LOG_TOTAL_BYTES, 16 * 1024)
             self.assertEqual(manifest["directoryBytes"], 8192)
-            self.assertFalse(manifest["changedFilesOnly"])
-            self.assertIsNone(manifest["baseVersion"])
+            self.assertTrue(manifest["changedFilesOnly"])
+            self.assertEqual(manifest["baseVersion"], "4.0.12")
             self.assertEqual(manifest["signMethod"], "MD5")
             self.assertEqual(
-                manifest["selfUpdateRequiredBytes"],
-                manifest["alignedBytes"] * 2
-                + 20 * 1024
-                + FILESYSTEM_SAFETY_BYTES,
+                json.loads((output / "aliyun_custom_info.txt").read_text(encoding="utf-8")),
+                json.loads(manifest["extData"]["_package_udi"]),
             )
-            # The screenshot shows about 396 KiB free with 4.0.3. Version
-            # 4.0.4 adds one aligned block, so budget against 392 KiB.
-            self.assertLessEqual(
-                manifest["selfUpdateRequiredBytes"], 392 * 1024
-            )
+            self.assertEqual(manifest["selfUpdateRequiredBytes"], 286720)
+            self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
             for item in manifest["files"]:
                 artifact = output / item["fileName"]
                 self.assertEqual(artifact.stat().st_size, item["fileSize"])
@@ -106,22 +102,25 @@ class BuildTests(unittest.TestCase):
     def test_incremental_build_omits_unchanged_modules_and_fits_device(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release"
-            manifest = build(output, "4.0.10")
+            manifest = build(
+                output,
+                "4.0.13",
+                target_version="4.0.14",
+                force_include=("collector_ota.py",),
+            )
             self.assertTrue(manifest["changedFilesOnly"])
-            self.assertEqual(manifest["baseVersion"], "4.0.10")
+            self.assertEqual(manifest["baseVersion"], "4.0.13")
+            self.assertEqual(manifest["version"], "4.0.14")
             self.assertEqual(
                 [item["fileName"] for item in manifest["files"]],
                 [
-                    "collector_app.py.bin",
                     "collector_config.py.bin",
-                    "collector_protocol.py.bin",
-                    "collector_queue.py.bin",
-                    "collector_uart.py.bin",
+                    "collector_ota.py.bin",
                 ],
             )
-            self.assertEqual(manifest["alignedBytes"], 88 * 1024)
-            self.assertEqual(manifest["backupAlignedBytes"], 88 * 1024)
-            self.assertEqual(manifest["selfUpdateRequiredBytes"], 212 * 1024)
+            self.assertEqual(manifest["alignedBytes"], 60 * 1024)
+            self.assertEqual(manifest["backupAlignedBytes"], 60 * 1024)
+            self.assertEqual(manifest["selfUpdateRequiredBytes"], 156 * 1024)
             self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
             self.assertNotIn("legacy", manifest)
             self.assertFalse((output / "main.py.bin").exists())

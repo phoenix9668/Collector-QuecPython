@@ -6,6 +6,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -174,14 +175,68 @@ class CloudAckTests(unittest.TestCase):
             record = delivery.next_record({})
             self.assertEqual(record["seq"], 0)
 
-    def test_custom_event_uses_alink_value_envelope_and_numeric_id(self):
+    def test_custom_event_uses_direct_alink_params_ack_and_numeric_id(self):
         with tempfile.TemporaryDirectory() as temp:
             cloud, _delivery, published = self.make_cloud(temp)
+            cloud.connected = True
             self.assertTrue(cloud.publish_event("runtimeLog", {"seq": 7}))
             payload = json.loads(published[-1][1])
             self.assertTrue(payload["id"].isdigit())
-            self.assertEqual(payload["params"]["value"], {"seq": 7})
-            self.assertIsInstance(payload["params"]["time"], int)
+            self.assertEqual(payload["params"], {"seq": 7})
+            self.assertNotIn("value", payload["params"])
+            self.assertEqual(payload["sys"], {"ack": 1})
+            self.assertEqual(payload["method"], "thing.event.runtimeLog.post")
+
+    def test_custom_event_reply_and_timeout_retry_are_tracked(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, _delivery, published = self.make_cloud(temp)
+            cloud.connected = True
+            self.assertTrue(cloud.publish_event("debugLog", {"seq": 8}))
+            payload = published[-1][1]
+            message_id = json.loads(payload)["id"]
+            cloud.event_inflight[message_id]["sent_ms"] = ticks_ms() - 16000
+            cloud._check_event_timeouts()
+            self.assertEqual(published[-1][1], payload)
+            self.assertEqual(cloud.stats()["event_retry_count"], 1)
+            cloud._handle_event_reply("debugLog", {"id": message_id, "code": 200})
+            self.assertEqual(cloud.stats()["event_post_success"], 1)
+            self.assertEqual(cloud.stats()["event_inflight"], 0)
+
+            cloud.last_event_publish_ms = None
+            self.assertTrue(cloud.publish_event("runtimeLog", {"seq": 9}))
+            rejected_id = json.loads(published[-1][1])["id"]
+            cloud._handle_event_reply(
+                "runtimeLog", {"id": rejected_id, "code": 6300, "message": "bad"}
+            )
+            self.assertEqual(cloud.stats()["event_post_rejected"], 1)
+            cloud._handle_event_reply("runtimeLog", {"id": "missing", "code": 200})
+            self.assertEqual(cloud.stats()["event_post_unmatched"], 1)
+
+    def test_uart_sample_property_set_persists_replies_and_reports_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, _delivery, published = self.make_cloud(temp)
+            with patch("collector_cloud.save_uart_sample_log") as save:
+                cloud._handle_property_set(
+                    {
+                        "id": "17",
+                        "params": {"product_information:UartSampleLog": 1},
+                    }
+                )
+            save.assert_called_once_with(True)
+            self.assertTrue(cloud.uart_sample_log_enabled)
+            reply = json.loads(published[0][1])
+            report = json.loads(published[1][1])
+            self.assertEqual(reply["code"], 200)
+            self.assertEqual(
+                report["params"]["product_information:UartSampleLog"]["value"], 1
+            )
+
+            published.clear()
+            cloud._handle_property_set(
+                {"id": "18", "params": {"UartSampleLog": "invalid"}}
+            )
+            self.assertEqual(json.loads(published[0][1])["code"], 400)
+            self.assertTrue(cloud.uart_sample_log_enabled)
 
     def test_auxiliary_property_reply_is_not_counted_as_unmatched_signs(self):
         with tempfile.TemporaryDirectory() as temp:

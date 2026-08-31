@@ -1,0 +1,54 @@
+{
+  "module": "collector_app",
+  "version": "4.0.11",
+  "baseVersion": "4.0.10",
+  "changedFilesOnly": true,
+  "signMethod": "MD5",
+  "alignedBytes": 90112,
+  "fileAlignedBytes": 81920,
+  "directoryBytes": 8192,
+  "backupAlignedBytes": 90112,
+  "copyModeExtraBytes": 0,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 217088,
+  "files": [
+    {
+      "fileName": "collector_app.py.bin",
+      "fileSize": 15687,
+      "fileMd5": "81572d7b189ff759a6981216c00a9c30",
+      "signMethod": "MD5",
+      "target": "/usr/collector_app.py"
+    },
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 7830,
+      "fileMd5": "1ab2cd1f42b1228f4923b7518e4555ff",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py"
+    },
+    {
+      "fileName": "collector_protocol.py.bin",
+      "fileSize": 14928,
+      "fileMd5": "6811972e731acfd6babe9ed41772307c",
+      "signMethod": "MD5",
+      "target": "/usr/collector_protocol.py"
+    },
+    {
+      "fileName": "collector_queue.py.bin",
+      "fileSize": 32710,
+      "fileMd5": "4047571478fe4bc3abeedc88a046cd0b",
+      "signMethod": "MD5",
+      "target": "/usr/collector_queue.py"
+    },
+    {
+      "fileName": "collector_uart.py.bin",
+      "fileSize": 6271,
+      "fileMd5": "0401f76de612c2bbed505614b1e0485d",
+      "signMethod": "MD5",
+      "target": "/usr/collector_uart.py"
+    }
+  ],
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_app.py.bin\": \"/usr/collector_app.py\", \"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_protocol.py.bin\": \"/usr/collector_protocol.py\", \"collector_queue.py.bin\": \"/usr/collector_queue.py\", \"collector_uart.py.bin\": \"/usr/collector_uart.py\"}}"
+  }
+}

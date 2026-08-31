@@ -1,5 +1,7 @@
-import json
+import contextlib
 import hashlib
+import io
+import json
 import struct
 import sys
 import tempfile
@@ -85,10 +87,31 @@ class OtaTests(unittest.TestCase):
         manager.publish = lambda topic, payload, qos: published.append(
             (topic, json.loads(payload), qos)
         ) or True
-        with patch.object(ota_module, "ticks_ms", return_value=10000):
+        output = io.StringIO()
+        with (
+            patch.object(ota_module, "ticks_ms", return_value=10000),
+            contextlib.redirect_stdout(output),
+        ):
             self.assertTrue(manager.progress(-1, "failed"))
         self.assertEqual(published[0][1]["params"]["step"], "-1")
         self.assertIsInstance(published[0][1]["params"]["step"], str)
+        self.assertIn("progress=-1% failed", output.getvalue())
+
+    def test_enqueue_prints_received_stage_without_task_urls(self):
+        manager = self.make_manager()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertTrue(
+                manager.enqueue(
+                    {
+                        "version": "4.0.13",
+                        "files": [{"fileUrl": "https://secret.example/signed"}],
+                    }
+                )
+            )
+        text = output.getvalue()
+        self.assertIn("version=4.0.13 progress=0%", text)
+        self.assertNotIn("secret.example", text)
 
     def test_target_path_allowlist(self):
         self.assertTrue(safe_target_path("/usr/collector_app.py"))
@@ -206,6 +229,32 @@ class OtaTests(unittest.TestCase):
         data["files"][0]["fileMd5"] = "z" * 32
         with self.assertRaises(ValueError):
             manager._build_multi_files(data)
+
+    def test_package_mapping_accepts_aliyun_and_double_wrapped_custom_info(self):
+        manager = self.make_manager()
+        mapping = {"collector_app.py.bin": "/usr/collector_app.py"}
+        package = {"files": mapping}
+
+        standard = {
+            "extData": {"_package_udi": json.dumps(package)}
+        }
+        self.assertEqual(manager._package_mapping(standard), mapping)
+
+        string_ext_data = {
+            "extData": json.dumps(
+                {"_package_udi": json.dumps(package)}
+            )
+        }
+        self.assertEqual(manager._package_mapping(string_ext_data), mapping)
+
+        double_wrapped = {
+            "extData": {
+                "_package_udi": json.dumps(
+                    {"_package_udi": json.dumps(package)}
+                )
+            }
+        }
+        self.assertEqual(manager._package_mapping(double_wrapped), mapping)
 
     def test_multi_and_legacy_preflight_include_backup_copy(self):
         data = {
@@ -347,6 +396,8 @@ class OtaTests(unittest.TestCase):
                 "md5": expected_md5,
             }
             calls = {"flag": 0, "reboot": 0}
+            sequence = []
+            usb_steps = []
 
             class FakeUpdater:
                 def bulk_download(self, _download_list):
@@ -358,6 +409,7 @@ class OtaTests(unittest.TestCase):
                 def set_update_flag(self, use_rename=False):
                     self.use_rename = use_rename
                     calls["flag"] += 1
+                    sequence.append("flag")
                     return 0
 
             app_fota = types.ModuleType("app_fota")
@@ -366,6 +418,12 @@ class OtaTests(unittest.TestCase):
             manager = self.make_manager(storage)
             manager.reboot = lambda: calls.__setitem__("reboot", 1)
             manager._build_multi_files = lambda _data: ([item], 12288)
+            manager.publish = lambda _topic, payload, _qos: sequence.append(
+                int(json.loads(payload)["params"]["step"])
+            ) or True
+            manager._usb_progress = lambda step, _description, version="": (
+                usb_steps.append(int(step))
+            )
             with (
                 patch.object(ota_module, "OTA_UPDATER_DIR", updater_dir),
                 patch.object(ota_module, "ROLLBACK_DIR", rollback_dir),
@@ -376,6 +434,12 @@ class OtaTests(unittest.TestCase):
             ):
                 manager._process_multi({}, "4.0.1")
                 self.assertEqual(calls, {"flag": 1, "reboot": 1})
+                self.assertIn(5, sequence)
+                self.assertIn(10, sequence)
+                self.assertIn(85, sequence)
+                self.assertIn(95, usb_steps)
+                self.assertLess(sequence.index("flag"), sequence.index(99))
+                self.assertLess(sequence.index(99), sequence.index(100))
                 self.assertTrue(storage.released)
                 self.assertTrue(Path(pending_path).exists())
                 self.assertTrue(OtaBootGuard.restore())

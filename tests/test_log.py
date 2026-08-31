@@ -96,6 +96,16 @@ class LogTests(unittest.TestCase):
             logger.clear_persistent()
             self.assertFalse(any(path.exists() for path in paths))
 
+    def test_local_error_is_persisted_but_never_queued_for_cloud(self):
+        with tempfile.TemporaryDirectory() as directory:
+            logger = StructuredLogger(local_dir=directory)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertTrue(
+                    logger.local_error("mqtt", "EVENT_REPLY", "rejected")
+                )
+            self.assertEqual(logger.stats()["queued"], 0)
+            self.assertTrue((Path(directory) / "critical.log").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

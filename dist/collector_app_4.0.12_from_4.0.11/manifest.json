@@ -1,0 +1,33 @@
+{
+  "module": "collector_app",
+  "version": "4.0.12",
+  "baseVersion": "4.0.11",
+  "changedFilesOnly": true,
+  "signMethod": "MD5",
+  "alignedBytes": 53248,
+  "fileAlignedBytes": 45056,
+  "directoryBytes": 8192,
+  "backupAlignedBytes": 53248,
+  "copyModeExtraBytes": 0,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 143360,
+  "files": [
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 7830,
+      "fileMd5": "bd999a2272d7026ad64f71849083a569",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py"
+    },
+    {
+      "fileName": "collector_ota.py.bin",
+      "fileSize": 35898,
+      "fileMd5": "02006c025672cb8d3ca12caab3bb1f2a",
+      "signMethod": "MD5",
+      "target": "/usr/collector_ota.py"
+    }
+  ],
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_ota.py.bin\": \"/usr/collector_ota.py\"}}"
+  }
+}

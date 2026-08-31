@@ -58,6 +58,20 @@
       }
     },
     {
+      "identifier": "UartSampleLog",
+      "name": "串口原始数据采样日志",
+      "accessMode": "rw",
+      "desc": "控制低频UART原始数据预览日志。关闭时仍保留统计、错误及溢出日志。",
+      "required": false,
+      "dataType": {
+        "type": "bool",
+        "specs": {
+          "0": "关闭",
+          "1": "开启"
+        }
+      }
+    },
+    {
       "identifier": "NetStatus",
       "name": "网络状态",
       "accessMode": "r",
@@ -282,6 +296,17 @@
           }
         },
         {
+          "identifier": "UartSampleLog",
+          "name": "串口原始数据采样日志",
+          "dataType": {
+            "type": "bool",
+            "specs": {
+              "0": "关闭",
+              "1": "开启"
+            }
+          }
+        },
+        {
           "identifier": "NetStatus",
           "name": "网络状态",
           "dataType": {
@@ -464,6 +489,17 @@
               "length": "1024"
             }
           }
+        },
+        {
+          "identifier": "UartSampleLog",
+          "name": "串口原始数据采样日志",
+          "dataType": {
+            "type": "bool",
+            "specs": {
+              "0": "关闭",
+              "1": "开启"
+            }
+          }
         }
       ],
       "outputData": []
@@ -480,6 +516,7 @@
         "ICCID",
         "CollectorID",
         "AppVersion",
+        "UartSampleLog",
         "NetStatus",
         "SendCommand",
         "StatusInfo",
@@ -523,6 +560,17 @@
             "type": "text",
             "specs": {
               "length": "16"
+            }
+          }
+        },
+        {
+          "identifier": "UartSampleLog",
+          "name": "串口原始数据采样日志",
+          "dataType": {
+            "type": "bool",
+            "specs": {
+              "0": "关闭",
+              "1": "开启"
             }
           }
         },

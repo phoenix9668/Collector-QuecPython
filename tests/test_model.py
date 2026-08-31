@@ -45,8 +45,36 @@ class ModelTests(unittest.TestCase):
         self.assertIn("AppVersion", properties)
         self.assertEqual(properties["AppVersion"]["accessMode"], "r")
         self.assertEqual(properties["SendCommand"]["accessMode"], "rw")
+        self.assertEqual(properties["UartSampleLog"]["accessMode"], "rw")
+        self.assertEqual(properties["UartSampleLog"]["dataType"]["type"], "bool")
+        self.assertEqual(
+            properties["UartSampleLog"]["dataType"]["specs"],
+            {"0": "关闭", "1": "开启"},
+        )
         self.assertIn("兼容保留", properties["SendCommand"]["desc"])
         self.assertIn("兼容保留", properties["EthernetStatus"]["desc"])
+        property_post = next(
+            item for item in product["events"] if item["identifier"] == "post"
+        )
+        self.assertIn(
+            "UartSampleLog",
+            {item["identifier"] for item in property_post["outputData"]},
+        )
+        property_set = next(
+            item for item in product["services"] if item["identifier"] == "set"
+        )
+        self.assertIn(
+            "UartSampleLog",
+            {item["identifier"] for item in property_set["inputData"]},
+        )
+        property_get = next(
+            item for item in product["services"] if item["identifier"] == "get"
+        )
+        self.assertIn("UartSampleLog", property_get["inputData"])
+        self.assertIn(
+            "UartSampleLog",
+            {item["identifier"] for item in property_get["outputData"]},
+        )
         signs = models["项圈信息.json"]["properties"][0]
         self.assertEqual(signs["identifier"], "SignsData")
         self.assertEqual(

@@ -1,0 +1,54 @@
+{
+  "module": "collector_app",
+  "version": "4.0.13",
+  "baseVersion": "4.0.12",
+  "changedFilesOnly": true,
+  "signMethod": "MD5",
+  "alignedBytes": 135168,
+  "fileAlignedBytes": 126976,
+  "directoryBytes": 8192,
+  "backupAlignedBytes": 114688,
+  "copyModeExtraBytes": 0,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 286720,
+  "files": [
+    {
+      "fileName": "collector_app.py.bin",
+      "fileSize": 17549,
+      "fileMd5": "5d8103bdb993bc4c2c58bd59f362a4aa",
+      "signMethod": "MD5",
+      "target": "/usr/collector_app.py"
+    },
+    {
+      "fileName": "collector_cloud.py.bin",
+      "fileSize": 39391,
+      "fileMd5": "7fca483d13e7e7730966bfa6cfa24a9d",
+      "signMethod": "MD5",
+      "target": "/usr/collector_cloud.py"
+    },
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 8813,
+      "fileMd5": "5101544341739b8cb8421fd9bd6ad2de",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py"
+    },
+    {
+      "fileName": "collector_log.py.bin",
+      "fileSize": 10229,
+      "fileMd5": "23e9213dd1b9eaf280b51ff82b65d2c5",
+      "signMethod": "MD5",
+      "target": "/usr/collector_log.py"
+    },
+    {
+      "fileName": "collector_ota.py.bin",
+      "fileSize": 37620,
+      "fileMd5": "5b07b590f311cac472e4c7c01f4320a7",
+      "signMethod": "MD5",
+      "target": "/usr/collector_ota.py"
+    }
+  ],
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_app.py.bin\": \"/usr/collector_app.py\", \"collector_cloud.py.bin\": \"/usr/collector_cloud.py\", \"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_log.py.bin\": \"/usr/collector_log.py\", \"collector_ota.py.bin\": \"/usr/collector_ota.py\"}}"
+  }
+}

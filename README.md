@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.11`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.13`。
 
 ## 主要能力
 
@@ -9,7 +9,8 @@
 - DeviceSecret直接认证，或ProductSecret动态注册并缓存DeviceSecret；仓库不保存生产密钥。
 - 阿里云应用OTA：多文件 `app_fota` HTTP升级，以及兼容旧平台的MQTT分块单 `main.py` 升级。
 - 针对实机约576 KiB的 `/usr` 分区实际预占256 KiB OTA空间；体征Flash循环队列动态分配、最多96 KiB，且不会挤占OTA预留、安全余量和运行元数据空间。
-- `runtimeLog`、`debugLog`结构化云日志，本地严重日志双文件合计最多16 KiB。
+- `runtimeLog`、`debugLog`结构化云日志使用独立限速线程和阿里云事件回复确认，本地严重日志双文件合计最多16 KiB。
+- `product_information:UartSampleLog`可远程开启低频UART原始数据预览，默认关闭并保存到 `/usr/collector_settings.json`；统计和错误日志不受开关影响。
 
 ## 目录
 
@@ -40,12 +41,13 @@
 ```powershell
 python -m unittest discover -s tests -v
 python tools/build_model_zip.py
-python tools/build_ota_package.py
+python tools/build_ota_package.py --base-version 4.0.12 --output dist/collector_app_4.0.13_from_4.0.12
+python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.14 --force-include collector_ota.py --output dist/collector_app_4.0.14_from_4.0.13
 ```
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
-物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出默认位于 `dist/collector_app_<当前版本>/`；构建会按每个文件4 KiB、目录8 KiB计入占用，完整应用上限为176 KiB，并在清单写入完整自升级所需空间。576 KiB实机不能同时容纳全部模块的新副本和回滚副本时，应按设备当前版本构建只含变化模块的多文件整包，例如从4.0.10升级时运行 `python tools/build_ota_package.py --base-version 4.0.10`；阿里云仍选择“整包升级”，并只上传生成目录清单中的文件。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
+物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA构建按每个文件4 KiB、目录8 KiB计入占用，并在清单写入暂存、回滚、updater和安全余量的总需求。576 KiB实机必须按设备当前版本生成变化文件包；阿里云界面仍选择“整包升级”，只上传生成目录清单中的 `.py.bin`。生成的 `aliyun_custom_info.txt` 可原样粘贴到“推送给设备的自定义信息”，平台会自行添加 `_package_udi` 包装。4.0.13正式包需要约280 KiB自升级空间，4.0.14双文件验收包约156 KiB。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
 
 ## 投递边界
 

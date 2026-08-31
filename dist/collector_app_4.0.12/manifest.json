@@ -1,0 +1,7 @@
+{
+  "module": "collector_app",
+  "version": "4.0.12",
+  "baseVersion": "4.0.11",
+  "materializedBase": true,
+  "description": "Installed 4.0.12 image reconstructed from the 4.0.11 base and 4.0.12 incremental package."
+}
