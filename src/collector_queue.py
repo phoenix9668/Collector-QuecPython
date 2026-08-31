@@ -256,7 +256,12 @@ class SequenceCounter:
 
 
 class RawFrameQueue:
-    """Preallocated 206-byte FIFO. Records are removed only after ACK/spill."""
+    """Fixed-slot 206-byte FIFO. Records are removed only after ACK/spill.
+
+    EC600M R06A06M08 can allocate bytearray while rejecting item and slice
+    assignment. Parser output is already immutable bytes, so keep one bounded
+    reference slot per frame instead of copying it into a mutable byte buffer.
+    """
 
     QUEUED = 0
     INFLIGHT = 1
@@ -265,7 +270,7 @@ class RawFrameQueue:
 
     def __init__(self, capacity):
         self.capacity = int(capacity)
-        self.frames = bytearray(self.capacity * SIGNS_FRAME_SIZE)
+        self.frames = [None] * self.capacity
         self.sequences = [0] * self.capacity
         self.timestamps = [0] * self.capacity
         self.states = [self.QUEUED] * self.capacity
@@ -283,8 +288,7 @@ class RawFrameQueue:
         return (self.count * 100) // self.capacity
 
     def _copy_frame(self, index):
-        start = index * SIGNS_FRAME_SIZE
-        return bytes(self.frames[start : start + SIGNS_FRAME_SIZE])
+        return self.frames[index]
 
     def push(self, sequence, timestamp_ms, frame):
         if len(frame) != SIGNS_FRAME_SIZE:
@@ -294,8 +298,9 @@ class RawFrameQueue:
             if self.count >= self.capacity:
                 return False
             index = self.tail
-            start = index * SIGNS_FRAME_SIZE
-            self.frames[start : start + SIGNS_FRAME_SIZE] = frame
+            if not isinstance(frame, bytes):
+                frame = bytes(frame)
+            self.frames[index] = frame
             self.sequences[index] = int(sequence)
             self.timestamps[index] = int(timestamp_ms)
             self.states[index] = self.QUEUED
@@ -369,6 +374,9 @@ class RawFrameQueue:
                     found = True
                     break
             while self.count and self.states[self.head] == self.ACKED:
+                self.frames[self.head] = None
+                self.sequences[self.head] = 0
+                self.timestamps[self.head] = 0
                 self.states[self.head] = self.QUEUED
                 self.head = (self.head + 1) % self.capacity
                 self.count -= 1
@@ -419,6 +427,10 @@ class RawFrameQueue:
                 return False
             if self.sequences[index] != record["seq"]:
                 return False
+            self.frames[index] = None
+            self.sequences[index] = 0
+            self.timestamps[index] = 0
+            self.states[index] = self.QUEUED
             self.tail = index
             self.count -= 1
         return True

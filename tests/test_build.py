@@ -106,22 +106,22 @@ class BuildTests(unittest.TestCase):
     def test_incremental_build_omits_unchanged_modules_and_fits_device(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release"
-            manifest = build(output, "4.0.9")
+            manifest = build(output, "4.0.10")
             self.assertTrue(manifest["changedFilesOnly"])
-            self.assertEqual(manifest["baseVersion"], "4.0.9")
+            self.assertEqual(manifest["baseVersion"], "4.0.10")
             self.assertEqual(
                 [item["fileName"] for item in manifest["files"]],
                 [
                     "collector_app.py.bin",
-                    "collector_cloud.py.bin",
                     "collector_config.py.bin",
                     "collector_protocol.py.bin",
+                    "collector_queue.py.bin",
                     "collector_uart.py.bin",
                 ],
             )
             self.assertEqual(manifest["alignedBytes"], 88 * 1024)
-            self.assertEqual(manifest["backupAlignedBytes"], 84 * 1024)
-            self.assertEqual(manifest["selfUpdateRequiredBytes"], 208 * 1024)
+            self.assertEqual(manifest["backupAlignedBytes"], 88 * 1024)
+            self.assertEqual(manifest["selfUpdateRequiredBytes"], 212 * 1024)
             self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
             self.assertNotIn("legacy", manifest)
             self.assertFalse((output / "main.py.bin").exists())

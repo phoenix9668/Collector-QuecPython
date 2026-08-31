@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.10`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.11`。
 
 ## 主要能力
 
@@ -45,7 +45,7 @@ python tools/build_ota_package.py
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
-物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出位于 `dist/collector_app_4.0.10/`；构建会按每个文件4 KiB、目录8 KiB计入占用，完整应用上限为176 KiB，并在清单写入完整自升级所需空间。576 KiB实机不能同时容纳全部模块的新副本和回滚副本时，应按设备当前版本构建只含变化模块的多文件整包，例如 `python tools/build_ota_package.py --base-version 4.0.9`；输出目录名带 `_from_4.0.9`，阿里云仍选择“整包升级”，并只上传该目录清单中的文件。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
+物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA输出默认位于 `dist/collector_app_<当前版本>/`；构建会按每个文件4 KiB、目录8 KiB计入占用，完整应用上限为176 KiB，并在清单写入完整自升级所需空间。576 KiB实机不能同时容纳全部模块的新副本和回滚副本时，应按设备当前版本构建只含变化模块的多文件整包，例如从4.0.10升级时运行 `python tools/build_ota_package.py --base-version 4.0.10`；阿里云仍选择“整包升级”，并只上传生成目录清单中的文件。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`；从3.x单体版本迁移应先做完整首装或多文件升级。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
 
 ## 投递边界
 

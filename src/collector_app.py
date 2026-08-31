@@ -21,6 +21,7 @@ from collector_config import (
 )
 from collector_log import StructuredLogger
 from collector_ota import OtaBootGuard, OtaManager
+from collector_protocol import hex_preview
 from collector_queue import (
     DeliveryStore,
     FlashJournal,
@@ -118,6 +119,8 @@ class CollectorApplication:
         self.cloud.attach_ota(self.ota)
         self.logger.attach_cloud(self.cloud.publish_event, self.cloud.context)
         self.uart = UartPipeline(self.delivery, self.cloud, self.logger)
+        self.last_uart_rx_sample_id = 0
+        self.last_uart_frame_sample_id = 0
         self.sensors = SensorService(self.config, self.cloud, self.logger)
 
     def _allocate_ram_queue(self):
@@ -259,7 +262,8 @@ class CollectorApplication:
                 "rx_overflow={rx_overflow},uart_errors={uart_errors},"
                 "uart_event={uart_event},uart_read={uart_read},"
                 "uart_feed={uart_feed},uart_empty={uart_empty},"
-                "uart_last={uart_last},parse_errors={parse_errors},"
+                "uart_store={uart_store},uart_last={uart_last},"
+                "parse_errors={parse_errors},"
                 "ring={ring}/{ring_cap}/{ring_mode},"
                 "ram={ram}/{ram_cap},flash={flash}/{flash_cap},"
                 "flash_crc={flash_crc},flash_io={flash_io},"
@@ -279,6 +283,7 @@ class CollectorApplication:
                 uart_read=uart_stats["read_error_events"],
                 uart_feed=uart_stats["feed_error_events"],
                 uart_empty=uart_stats["empty_read_events"],
+                uart_store=uart_stats["storage_error_frames"],
                 uart_last=uart_stats["last_driver_error"],
                 parse_errors=uart_stats["sync_errors"],
                 ring=uart_stats["ring_depth"],
@@ -307,9 +312,32 @@ class CollectorApplication:
                 "UART and delivery queue statistics",
                 value=uart_stats["signs_frames"], extra=extra
             )
+            rx_sample_id = uart_stats["rx_sample_id"]
+            frame_sample_id = uart_stats["frame_sample_id"]
+            if (
+                rx_sample_id != self.last_uart_rx_sample_id
+                or frame_sample_id != self.last_uart_frame_sample_id
+            ):
+                sample_extra = "chunk_len={},raw={}".format(
+                    uart_stats["rx_sample_size"],
+                    hex_preview(uart_stats["rx_sample"]),
+                )
+                if frame_sample_id != self.last_uart_frame_sample_id:
+                    sample_extra += ",frame_type={},frame_len={},frame={}".format(
+                        uart_stats["frame_sample_kind"],
+                        uart_stats["frame_sample_size"],
+                        hex_preview(uart_stats["frame_sample"]),
+                    )
+                self.logger.info(
+                    "uart", "RX_SAMPLE", "Recent UART receive sample",
+                    extra=sample_extra,
+                )
+                self.last_uart_rx_sample_id = rx_sample_id
+                self.last_uart_frame_sample_id = frame_sample_id
             if (
                 uart_stats["rx_overflow_bytes"]
                 or uart_stats["driver_error_events"]
+                or uart_stats["storage_error_frames"]
                 or delivery_stats["rejected"]
             ):
                 self.logger.error(

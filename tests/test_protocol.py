@@ -13,6 +13,7 @@ from collector_protocol import (  # noqa: E402
     ByteRing,
     FrameStream,
     decode_signs_frame,
+    hex_preview,
     legacy_hex,
 )
 
@@ -28,6 +29,26 @@ def make_frame(sequence):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_uart_diagnostic_samples_are_bounded_and_show_complete_frames(self):
+        stream = FrameStream(32768)
+        raw = bytes(range(100))
+        stream.feed(raw)
+        stats = stream.stats()
+        self.assertEqual(stats["rx_sample_size"], 100)
+        self.assertEqual(stats["rx_sample"], raw[:48])
+        self.assertEqual(len(stats["rx_sample"]), 48)
+
+        received = []
+        signs = make_frame(77)
+        stream.feed(signs)
+        stream.drain(lambda item, _timestamp: received.append(item))
+        stats = stream.stats()
+        self.assertEqual(received, [signs])
+        self.assertEqual(stats["frame_sample_kind"], "B0")
+        self.assertEqual(stats["frame_sample_size"], 206)
+        self.assertEqual(stats["frame_sample"], signs[:48])
+        self.assertEqual(hex_preview(bytes([0x00, 0x0B, 0xAF])), "00 0b af")
+
     def test_read_only_bytearray_firmware_uses_segment_ring(self):
         module_globals = ByteRing.__init__.__globals__
         original_bytearray = module_globals.get("bytearray")

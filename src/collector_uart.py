@@ -20,6 +20,7 @@ class UartPipeline:
         self.stream = self._allocate_stream()
         self.stop = False
         self.rejected_frames = 0
+        self.storage_error_frames = 0
         self.driver_error_events = 0
         self.event_error_events = 0
         self.read_error_events = 0
@@ -94,11 +95,12 @@ class UartPipeline:
         try:
             accepted = self.delivery.accept(frame, captured_ms)
         except Exception as error:
-            accepted = False
+            self.storage_error_frames += 1
             self.logger.error(
-                "uart", "SEQUENCE", "Unable to persist SignsData sequence",
+                "uart", "RAM_QUEUE", "Unable to store SignsData in RAM queue",
                 extra=str(error), rate_limit_s=5
             )
+            return
         if not accepted:
             self.rejected_frames += 1
             self.logger.error(
@@ -164,6 +166,7 @@ class UartPipeline:
     def stats(self):
         result = self.stream.stats()
         result["rejected_frames"] = self.rejected_frames
+        result["storage_error_frames"] = self.storage_error_frames
         result["driver_error_events"] = self.driver_error_events
         result["event_error_events"] = self.event_error_events
         result["read_error_events"] = self.read_error_events

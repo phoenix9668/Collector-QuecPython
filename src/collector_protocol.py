@@ -25,6 +25,7 @@ SIGNS_TYPE = 0xB0
 VOLTAGE_TYPE = 0xB2
 INFO_MARKER = b"##"
 MAX_INFO_SIZE = 512
+UART_SAMPLE_SIZE = 48
 
 
 def now_ms():
@@ -220,6 +221,13 @@ class FrameStream:
         self.voltage_frames = 0
         self.info_frames = 0
         self.sync_errors = 0
+        self.rx_sample_id = 0
+        self.rx_sample_size = 0
+        self.rx_sample = b""
+        self.frame_sample_id = 0
+        self.frame_sample_kind = ""
+        self.frame_sample_size = 0
+        self.frame_sample = b""
 
     def feed(self, data):
         if not data:
@@ -227,6 +235,11 @@ class FrameStream:
         self.lock.acquire()
         try:
             self.rx_bytes += len(data)
+            # Keep one small bounded snapshot for the 60-second diagnostic
+            # worker. Hex conversion and printing stay outside this callback.
+            self.rx_sample_id += 1
+            self.rx_sample_size = len(data)
+            self.rx_sample = bytes(data[:UART_SAMPLE_SIZE])
             accepted = self.ring.write(data)
             self.rx_overflow_bytes += len(data) - accepted
             return accepted
@@ -251,6 +264,7 @@ class FrameStream:
                         continue
                     info = self.ring.read(end + 2)
                     self.info_frames += 1
+                    self._record_frame_sample("info", info)
                     return ("info", info, now_ms())
 
             if first != FRAME_PREFIX:
@@ -266,17 +280,25 @@ class FrameStream:
                     break
                 frame = self.ring.read(SIGNS_FRAME_SIZE)
                 self.signs_frames += 1
+                self._record_frame_sample("B0", frame)
                 return ("signs", frame, now_ms())
             if frame_type == VOLTAGE_TYPE:
                 if self.ring.count < VOLTAGE_FRAME_SIZE:
                     break
                 frame = self.ring.read(VOLTAGE_FRAME_SIZE)
                 self.voltage_frames += 1
+                self._record_frame_sample("B2", frame)
                 return ("voltage", frame, now_ms())
 
             self.ring.discard(1)
             self.sync_errors += 1
         return None
+
+    def _record_frame_sample(self, kind, frame):
+        self.frame_sample_id += 1
+        self.frame_sample_kind = kind
+        self.frame_sample_size = len(frame)
+        self.frame_sample = bytes(frame[:UART_SAMPLE_SIZE])
 
     def drain(self, signs_callback, voltage_callback=None, info_callback=None, limit=0):
         processed = 0
@@ -312,6 +334,13 @@ class FrameStream:
                 "ring_depth": self.ring.count,
                 "ring_capacity": self.ring.capacity,
                 "ring_mode": self.ring.storage_mode,
+                "rx_sample_id": self.rx_sample_id,
+                "rx_sample_size": self.rx_sample_size,
+                "rx_sample": self.rx_sample,
+                "frame_sample_id": self.frame_sample_id,
+                "frame_sample_kind": self.frame_sample_kind,
+                "frame_sample_size": self.frame_sample_size,
+                "frame_sample": self.frame_sample,
             }
         finally:
             self.lock.release()
@@ -325,6 +354,16 @@ def legacy_hex(data):
             value = ord(value)
         result += " " + hex(value)[2:]
     return result
+
+
+def hex_preview(data):
+    """Format a bounded diagnostic snapshot as unambiguous two-digit hex."""
+    values = []
+    for value in data:
+        if not isinstance(value, int):
+            value = ord(value)
+        values.append("%02x" % value)
+    return " ".join(values)
 
 
 def battery_pct(raw):

@@ -1,3 +1,4 @@
+import builtins
 import sys
 import tempfile
 import unittest
@@ -29,6 +30,28 @@ def frame(value):
 
 
 class QueueTests(unittest.TestCase):
+    def test_ram_queue_does_not_require_mutable_bytearray(self):
+        original_bytearray = queue_module.__dict__.get("bytearray")
+
+        class ReadOnlyBytearray(builtins.bytearray):
+            def __setitem__(self, _key, _value):
+                raise TypeError("bytearray object doesn't support item assignment")
+
+        queue_module.__dict__["bytearray"] = ReadOnlyBytearray
+        try:
+            queue = RawFrameQueue(2)
+            first_frame = frame(7)
+            self.assertTrue(queue.push(10, 20, first_frame))
+            self.assertEqual(queue.next_queued()["frame"], first_frame)
+            self.assertTrue(queue.ack(10))
+            self.assertEqual(queue.depth(), 0)
+            self.assertIsNone(queue.frames[0])
+        finally:
+            if original_bytearray is None:
+                queue_module.__dict__.pop("bytearray", None)
+            else:
+                queue_module.__dict__["bytearray"] = original_bytearray
+
     def test_ram_ack_commits_only_contiguous_head(self):
         queue = RawFrameQueue(8)
         for sequence in range(4):
