@@ -23,6 +23,13 @@ from collector_queue import DeliveryStore, RawFrameQueue, SequenceCounter  # noq
 
 
 class FakeLogger:
+    def __init__(self):
+        self.warn_calls = []
+
+    def warn(self, *args, **kwargs):
+        self.warn_calls.append((args, kwargs))
+        return True
+
     def __getattr__(self, _name):
         return lambda *args, **kwargs: True
 
@@ -36,6 +43,25 @@ def signs_frame(value):
 
 
 class CloudAckTests(unittest.TestCase):
+    def test_deliberate_disconnect_does_not_report_listener_ebadf(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, _delivery, _published = self.make_cloud(temp)
+
+            class ClosingClient:
+                def wait_msg(inner_self):
+                    cloud._mark_disconnected()
+                    raise OSError(9)
+
+                def close(inner_self):
+                    return None
+
+            client = ClosingClient()
+            cloud.client = client
+            cloud.connected = True
+            cloud.connection_generation = 1
+            cloud._listen_worker(1)
+            self.assertEqual(cloud.logger.warn_calls, [])
+
     def test_umqtt_loader_patches_reduced_log_and_discards_partial_import(self):
         with tempfile.TemporaryDirectory() as temp:
             module_path = Path(temp) / "umqtt.py"

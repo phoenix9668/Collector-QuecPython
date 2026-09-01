@@ -186,6 +186,24 @@ class AppTests(unittest.TestCase):
             calls, ["cloud_pause", "discard", "uart_pause", "sensor_pause"]
         )
 
+    def test_maintenance_keeps_external_watchdog_heartbeat_alive(self):
+        writes = []
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.cloud = types.SimpleNamespace(connected=False)
+        app.uart = types.SimpleNamespace(write=lambda data: writes.append(data) or 9)
+        app.logger = FakeLogger()
+        app.ota_exclusive = True
+        self.assertTrue(app._send_heartbeat())
+        self.assertEqual(writes, [b"Heartbeat"])
+
+        app.ota_exclusive = False
+        self.assertFalse(app._send_heartbeat())
+        self.assertEqual(writes, [b"Heartbeat"])
+
+        app.cloud.connected = True
+        self.assertTrue(app._send_heartbeat())
+        self.assertEqual(writes, [b"Heartbeat", b"Heartbeat"])
+
     def test_pending_ota_reserve_hold_is_info_not_error(self):
         app = CollectorApplication.__new__(CollectorApplication)
         app.pending_ota = {"version": "4.1.1"}
@@ -205,6 +223,17 @@ class AppTests(unittest.TestCase):
         self.assertEqual(app.logger.info_calls, [])
         self.assertEqual(len(app.logger.error_calls), 1)
         self.assertEqual(app.logger.error_calls[0][0][1], "OTA_RESERVE")
+
+    def test_migration_storage_hold_is_informational(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = None
+        app.migration_mode = True
+        app.logger = FakeLogger()
+        self.assertTrue(app._report_reserve_unavailable(startup=True))
+        self.assertEqual(app.logger.error_calls, [])
+        self.assertEqual(
+            app.logger.info_calls[0][0][1], "MIGRATION_STORAGE_DEFERRED"
+        )
 
     def test_health_confirmation_restores_storage_before_clearing_hold(self):
         app = CollectorApplication.__new__(CollectorApplication)
@@ -236,6 +265,27 @@ class AppTests(unittest.TestCase):
         self.assertEqual(len(app.logger.error_calls), 1)
         self.assertEqual(
             app.logger.error_calls[0][0][1], "OTA_RESERVE_RESTORE"
+        )
+
+    def test_health_confirmation_defers_storage_during_migration(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = {"version": "4.1.2"}
+        app.migration_mode = True
+        app.logger = FakeLogger()
+        app._restore_runtime_storage = lambda: self.fail(
+            "storage must remain deferred during migration"
+        )
+        started = []
+        app._start_migration = lambda: started.append(True) or True
+        with (
+            patch.object(app_module.utime, "sleep", lambda _value: None),
+            patch.object(app_module.OtaBootGuard, "mark_healthy", return_value=True),
+        ):
+            app._health_worker()
+        self.assertEqual(started, [True])
+        self.assertEqual(app.logger.error_calls, [])
+        self.assertEqual(
+            app.logger.info_calls[0][0][1], "MIGRATION_STORAGE_DEFERRED"
         )
 
 

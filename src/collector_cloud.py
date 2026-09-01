@@ -531,6 +531,16 @@ class CloudClient:
             try:
                 client.wait_msg()
             except Exception as error:
+                # A deliberate OTA/migration disconnect closes the socket to
+                # wake wait_msg(). EC600M reports that wake-up as EBADF; it is
+                # expected when this listener no longer owns the live client.
+                if (
+                    self.stop
+                    or not self.connected
+                    or generation != self.connection_generation
+                    or client is not self.client
+                ):
+                    break
                 self.logger.warn(
                     "mqtt", "LISTEN", "MQTT listener stopped: {}".format(error),
                     rate_limit_s=10

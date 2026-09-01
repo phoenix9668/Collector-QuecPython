@@ -234,6 +234,29 @@ class BuildTests(unittest.TestCase):
                 manifest["fileAlignedBytes"],
             )
 
+    def test_explicit_followup_build_allows_private_base_not_in_dist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "followup"
+            manifest = build(
+                output,
+                "9.9.8",
+                target_version="9.9.9",
+                include_files=(
+                    "collector_app.py",
+                    "collector_cloud.py",
+                    "collector_config.py",
+                    "collector_migration.py",
+                ),
+            )
+            self.assertEqual(manifest["baseVersion"], "9.9.8")
+            self.assertTrue(manifest["changedFilesOnly"])
+            self.assertFalse(manifest["containsSecrets"])
+            self.assertNotIn("legacy", manifest)
+            self.assertEqual(len(manifest["files"]), 4)
+            self.assertGreaterEqual(
+                manifest["backupAlignedBytes"], manifest["fileAlignedBytes"]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

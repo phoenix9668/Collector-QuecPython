@@ -221,7 +221,12 @@ def build(
     base_directory = _base_directory(
         base_version,
         target_version,
-        allow_missing=migration_config is not None,
+        # Explicit file selection is also safe without a retained base
+        # manifest: every selected target is shipped and conservatively
+        # budgeted as its own rollback copy. This supports follow-up OTA from
+        # a per-device private migration release that is intentionally not in
+        # the public dist tree.
+        allow_missing=migration_config is not None or bool(selected),
     )
     sources = [SOURCE / Path(target).name for target in MULTI_FILE_TARGETS]
     files = []

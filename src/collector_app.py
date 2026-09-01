@@ -20,12 +20,19 @@ from collector_config import (
 )
 from collector_log import StructuredLogger
 try:
-    from collector_migration import MigrationManager, recover_identity_before_load
+    from collector_migration import (
+        MigrationManager,
+        migration_pending_on_boot,
+        recover_identity_before_load,
+    )
 except ImportError:
     # The space-constrained 4.0.15 bridge installs the integration points one
     # OTA before the new module. It must remain bootable between both steps.
     def recover_identity_before_load():
         return None
+
+    def migration_pending_on_boot():
+        return False
 
     class MigrationManager:
         def __init__(self, *_args):
@@ -55,6 +62,7 @@ class CollectorApplication:
         # A committed migration must select its target identity before
         # device.json is parsed and before any MQTT worker can start.
         recover_identity_before_load()
+        self.migration_mode = bool(migration_pending_on_boot())
         self.storage = StorageBudget()
         self.pending_ota = OtaBootGuard.load_pending()
         # During the post-update health window the rollback copies and the
@@ -63,9 +71,9 @@ class CollectorApplication:
         # until mark_healthy() removes the rollback tree instead of attempting
         # a reservation that is guaranteed to fail and reporting a false
         # storage error.
-        reserve_ready = (
-            False if self.pending_ota else self.storage.ensure_reserve()
-        )
+        reserve_ready = False
+        if not self.pending_ota and not self.migration_mode:
+            reserve_ready = self.storage.ensure_reserve()
         self.logger = StructuredLogger()
         if not reserve_ready:
             self._report_reserve_unavailable(startup=True)
@@ -90,10 +98,10 @@ class CollectorApplication:
                     "storage", "SPOOL_INIT", "Flash SignsData spool initialization failed"
                 )
         else:
-            if self.pending_ota:
+            if self.pending_ota or self.migration_mode:
                 self.logger.info(
                     "storage", "SPOOL_DEFERRED",
-                    "Flash SignsData spool is deferred until OTA health confirmation",
+                    "Flash SignsData spool is deferred until maintenance completes",
                 )
             else:
                 self.logger.warn(
@@ -107,7 +115,6 @@ class CollectorApplication:
         self.sequence = SequenceCounter(initial=initial_sequence)
         self.delivery = DeliveryStore(self.ram_queue, self.sequence, self.journal)
         self.ota_exclusive = False
-        self.migration_mode = False
         self.migration_started = False
         self._ota_legacy_cloud_methods = None
         self._ota_legacy_sensor_methods = None
@@ -166,6 +173,15 @@ class CollectorApplication:
             return self.logger.info(
                 "storage", "OTA_RESERVE_DEFERRED",
                 "OTA reserve allocation is deferred until health confirmation",
+                extra="reserve_kib={},startup={}".format(
+                    OTA_RESERVED_BYTES // 1024, 1 if startup else 0
+                ),
+                rate_limit_s=60,
+            )
+        if getattr(self, "migration_mode", False):
+            return self.logger.info(
+                "storage", "MIGRATION_STORAGE_DEFERRED",
+                "OTA reserve and Flash spool are deferred until migration completes",
                 extra="reserve_kib={},startup={}".format(
                     OTA_RESERVED_BYTES // 1024, 1 if startup else 0
                 ),
@@ -397,16 +413,27 @@ class CollectorApplication:
                 pass
             utime.sleep(1)
 
+    def _send_heartbeat(self):
+        """Keep the subordinate-controller watchdog alive during maintenance."""
+        # Normal operation preserves the original network-health semantics:
+        # a disconnected collector does not mask the fault from the external
+        # watchdog. OTA/migration is an intentional maintenance window, so it
+        # must keep heartbeats flowing even while MQTT is being reconnected.
+        if not self.ota_exclusive and not self.cloud.connected:
+            return False
+        try:
+            self.uart.write(b"Heartbeat")
+            return True
+        except Exception as error:
+            self.logger.warn(
+                "uart", "HEARTBEAT", str(error), rate_limit_s=60
+            )
+            return False
+
     def _heartbeat_worker(self):
         while True:
+            self._send_heartbeat()
             utime.sleep(120)
-            if self.cloud.connected and not self.ota_exclusive:
-                try:
-                    self.uart.write(b"Heartbeat")
-                except Exception as error:
-                    self.logger.warn(
-                        "uart", "HEARTBEAT", str(error), rate_limit_s=60
-                    )
 
     def _storage_worker(self):
         """Persist batches independently of UART parsing and MQTT publishing."""
@@ -598,7 +625,9 @@ class CollectorApplication:
         # race between confirmation and rollback.
         utime.sleep(OTA_HEALTH_CONFIRM_SECONDS)
         if OtaBootGuard.mark_healthy():
-            storage_restored = self._restore_runtime_storage()
+            storage_restored = True
+            if not getattr(self, "migration_mode", False):
+                storage_restored = self._restore_runtime_storage()
             self.pending_ota = None
             try:
                 print(
@@ -613,6 +642,10 @@ class CollectorApplication:
                 "Application health window completed"
             )
             if getattr(self, "migration_mode", False):
+                self.logger.info(
+                    "storage", "MIGRATION_STORAGE_DEFERRED",
+                    "Runtime storage restore deferred until migration completes",
+                )
                 self._start_migration()
             if not storage_restored:
                 self.logger.error(

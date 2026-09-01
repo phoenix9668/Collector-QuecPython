@@ -16,7 +16,7 @@ except ImportError:  # host-side tests
 
 
 PROJECT_NAME = "QuecPython_EC600M"
-PROJECT_VERSION = "4.1.2"
+PROJECT_VERSION = "4.1.3"
 OTA_MODULE_NAME = "collector_app"
 OTA_MULTI_FILE_TARGETS = (
     "/usr/collector_app.py",

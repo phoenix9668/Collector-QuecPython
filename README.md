@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.2`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.3`。
 
 ## 主要能力
 
@@ -47,6 +47,7 @@ python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.15 
 python tools/build_ota_package.py --base-version 4.0.15 --target-version 4.1.0 --include collector_config.py --include collector_migration.py --include collector_queue.py --output dist/collector_app_4.1.0
 python tools/build_ota_package.py --base-version 4.1.0 --target-version 4.1.1 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.1_DEVICE_NAME
 python tools/build_ota_package.py --base-version 4.1.1 --target-version 4.1.2 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.2_DEVICE_NAME
+python tools/build_ota_package.py --base-version 4.1.2 --target-version 4.1.3 --include collector_app.py --include collector_cloud.py --include collector_config.py --include collector_migration.py --output private_dist/collector_app_4.1.3_from_4.1.2
 ```
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
@@ -60,5 +61,7 @@ QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌
 `SignsData` 使用 MQTT QoS 0 作为非阻塞传输层，并以阿里云 Alink `property/post_reply` 作为端到端确认：只有相同消息ID返回 `code=200` 且 `data` 为空才从队列删除；字段级错误、超时和断线都会保留原消息ID重试。正常发送限速为25条/秒，为阿里云单设备30条/秒上行限额保留余量。
 
 从修复版4.1.2开始，任何被接受的新版本OTA任务都会立即进入独占模式：停止UART解析、传感器和业务上报，清空RAM、Flash及在途SignsData，并在升级期间丢弃新串口数据；只保留MQTT连接、OTA下载和进度上报。升级失败后恢复空队列运行，升级成功则重启。此处是明确的主动丢数边界。
+
+外部看门狗心跳不属于被停止的业务：OTA和身份迁移期间即使MQTT临时断开，也继续每120秒通过UART2发送 `Heartbeat`，避免下位机把受控维护误判为模组故障并复位。正常运行仍沿用原逻辑，只在云连接正常时发送心跳。
 
 设备身份迁移同样不再使用序号水位线、25%容量门限或旧队列排空。迁移包重启后业务继续保持停止，先完成目标预注册和探测，再切换身份；目标runtimeLog确认且连接稳定120秒后再次重启并恢复正常业务，失败则恢复旧身份后重启。早期4.1.1在EC600M上因精简版`str`缺少字母数字判断方法而于迁移预检失败；已安装该版本的设备必须定向安装4.1.2修复包。执行这一趟的仍是板内旧OTA代码，可能仍需停止下位机并满足60秒静默；4.1.2运行后，后续升级不再需要该维护窗口。

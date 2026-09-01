@@ -206,6 +206,11 @@ def remove_migration_state(paths=None):
         remove_file(path + ".tmp")
 
 
+def migration_pending_on_boot():
+    """Return whether startup must stay in migration-only mode."""
+    return bool(load_migration_state() or _read_json(DEVICE_MIGRATION_FILE))
+
+
 def _valid_migration_id(value):
     value = str(value).strip()
     if not value or len(value) > 64:
@@ -343,7 +348,7 @@ class MigrationManager:
 
     def has_pending(self):
         """Return whether startup must stay in migration-only mode."""
-        return bool(self.state or _read_json(DEVICE_MIGRATION_FILE))
+        return bool(self.state or migration_pending_on_boot())
 
     def start(self):
         if _thread:
