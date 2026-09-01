@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "migrationId": "CHANGE_ME_UNIQUE_ID",
+  "source": {
+    "productKey": "CHANGE_ME_OLD_PRODUCT_KEY",
+    "deviceName": "CHANGE_ME_OLD_DEVICE_NAME"
+  },
+  "target": {
+    "productKey": "CHANGE_ME_NEW_PRODUCT_KEY",
+    "deviceName": "CHANGE_ME_NEW_DEVICE_NAME",
+    "mqttServer": "CHANGE_ME_NEW_MQTT_HOST.aliyuncs.com",
+    "mqttPort": 1883,
+    "deviceSecret": "",
+    "productSecret": "CHANGE_ME_NEW_PRODUCT_SECRET",
+    "otaAllowedHosts": [
+      ".aliyuncs.com",
+      ".aliyun.com"
+    ]
+  },
+  "confirmSeconds": 120,
+  "rollbackSeconds": 180
+}

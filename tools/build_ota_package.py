@@ -16,6 +16,7 @@ SOURCE = ROOT / "src"
 sys.path.insert(0, str(SOURCE))
 
 from collector_config import (  # noqa: E402
+    DEVICE_MIGRATION_FILE,
     FILESYSTEM_SAFETY_BYTES,
     OTA_DIRECTORY_BYTES as DIRECTORY_BYTES,
     OTA_MAX_APP_BYTES as MAX_ALIGNED_BYTES,
@@ -26,6 +27,7 @@ from collector_config import (  # noqa: E402
 
 
 APP_FOTA_OVERHEAD_BYTES = 20 * 1024
+PRIVATE_OUTPUT_ROOT = ROOT / "private_dist"
 
 
 def aligned_size(size: int) -> int:
@@ -38,6 +40,73 @@ def md5(path: Path) -> str:
         for chunk in iter(lambda: stream.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def validate_migration_config(path: Path) -> dict:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        raise ValueError("migration config schema must be 1")
+    migration_id = str(data.get("migrationId", "")).strip()
+    if not migration_id or len(migration_id) > 64:
+        raise ValueError("migration config has invalid migrationId")
+    if any(not (char.isalnum() or char in "-_.") for char in migration_id):
+        raise ValueError("migration config has invalid migrationId")
+    source = data.get("source", {})
+    target = data.get("target", {})
+    if not isinstance(source, dict) or not isinstance(target, dict):
+        raise ValueError("migration source/target must be objects")
+    for section, key in (
+        (source, "productKey"),
+        (source, "deviceName"),
+        (target, "productKey"),
+        (target, "deviceName"),
+        (target, "mqttServer"),
+        (target, "productSecret"),
+    ):
+        value = str(section.get(key, "")).strip()
+        if not value or "CHANGE_ME" in value.upper():
+            raise ValueError("migration config missing real {}".format(key))
+    if str(target.get("deviceSecret", "")).strip():
+        raise ValueError("migration target must use ProductSecret pre-registration")
+    if (
+        str(source.get("productKey")) == str(target.get("productKey"))
+        and str(source.get("deviceName")) == str(target.get("deviceName"))
+    ):
+        raise ValueError("migration source and target identities are identical")
+    mqtt_host = str(target.get("mqttServer", "")).strip().lower()
+    if (
+        "/" in mqtt_host
+        or ":" in mqtt_host
+        or "@" in mqtt_host
+        or not (
+            mqtt_host.endswith(".aliyuncs.com")
+            or mqtt_host.endswith(".aliyun.com")
+        )
+    ):
+        raise ValueError("migration target mqttServer is not an Aliyun host")
+    if int(target.get("mqttPort", 1883)) != 1883:
+        raise ValueError("migration target mqttPort must be 1883")
+    allowed_hosts = target.get("otaAllowedHosts", [])
+    if not isinstance(allowed_hosts, list) or not allowed_hosts:
+        raise ValueError("migration target otaAllowedHosts must be a non-empty array")
+    for allowed in allowed_hosts:
+        allowed = str(allowed).strip().lower()
+        if (
+            not allowed
+            or "/" in allowed
+            or ":" in allowed
+            or "@" in allowed
+            or not (
+                allowed.endswith(".aliyuncs.com")
+                or allowed.endswith(".aliyun.com")
+            )
+        ):
+            raise ValueError("migration target has unsafe OTA allowed host")
+    if int(data.get("confirmSeconds", 120)) != 120:
+        raise ValueError("migration confirmSeconds must be 120")
+    if int(data.get("rollbackSeconds", 180)) != 180:
+        raise ValueError("migration rollbackSeconds must be 180")
+    return data
 
 
 def _base_directory(
@@ -57,15 +126,60 @@ def _base_directory(
     return directory
 
 
+def _installed_base_artifact(base_directory: Path | None, name: str) -> Path | None:
+    """Resolve a file through an incremental package's base-version chain."""
+    directory = base_directory
+    seen = set()
+    while directory is not None:
+        key = str(directory.resolve())
+        if key in seen:
+            raise ValueError("cyclic OTA baseVersion chain")
+        seen.add(key)
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+        manifest_path = directory / "manifest.json"
+        if not manifest_path.is_file():
+            return None
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        parent_version = str(manifest.get("baseVersion", "")).strip()
+        if not parent_version:
+            return None
+        directory = ROOT / "dist" / ("collector_app_" + parent_version)
+    return None
+
+
 def build(
     output: Path,
     base_version: str | None = None,
     target_version: str | None = None,
     force_include: tuple[str, ...] = (),
+    migration_config: Path | None = None,
+    include_files: tuple[str, ...] = (),
 ) -> dict:
     target_version = target_version or VERSION
     forced = set(force_include)
+    selected = set(include_files)
+    if migration_config is not None and not selected:
+        selected = {"collector_config.py"}
+    if migration_config is not None:
+        if not base_version or not target_version:
+            raise ValueError(
+                "migration package requires base_version and target_version"
+            )
+        private_root = PRIVATE_OUTPUT_ROOT.resolve()
+        resolved_output = output.resolve()
+        if private_root != resolved_output and private_root not in resolved_output.parents:
+            raise ValueError("migration packages must be written below private_dist")
+        validate_migration_config(migration_config)
     valid_names = {Path(target).name for target in MULTI_FILE_TARGETS}
+    unknown_selected = selected - valid_names
+    if unknown_selected:
+        raise ValueError(
+            "selected OTA files are not allowed targets: {}".format(
+                ",".join(sorted(unknown_selected))
+            )
+        )
     unknown_forced = forced - valid_names
     if unknown_forced:
         raise ValueError(
@@ -78,6 +192,9 @@ def build(
     # unrelated notes or operator files that may share the output directory.
     for stale in output.glob("*.py.bin"):
         stale.unlink()
+    stale_migration = output / "device_migration.json.bin"
+    if stale_migration.exists():
+        stale_migration.unlink()
     manifest_path = output / "manifest.json"
     if manifest_path.exists():
         manifest_path.unlink()
@@ -90,6 +207,8 @@ def build(
     copy_mode_extra_bytes = 0
     directories = set()
     for source in sources:
+        if selected and source.name not in selected:
+            continue
         if not source.is_file():
             raise FileNotFoundError("missing OTA source: {}".format(source))
         source_text = source.read_text(encoding="utf-8")
@@ -102,9 +221,7 @@ def build(
         compile(source_text, str(source), "exec")
         artifact = output / (source.name + ".bin")
         artifact.write_text(source_text, encoding="utf-8", newline="")
-        base_artifact = (
-            base_directory / artifact.name if base_directory is not None else None
-        )
+        base_artifact = _installed_base_artifact(base_directory, artifact.name)
         if (
             base_artifact is not None
             and base_artifact.is_file()
@@ -121,15 +238,35 @@ def build(
         mapping[artifact.name] = target
         size = artifact.stat().st_size
         total += aligned_size(size)
-        if base_artifact is None:
+        if base_directory is None:
             # A normal full build budgets the installed target at the new size.
             backup_file_bytes += aligned_size(size)
-        elif base_artifact.is_file():
+        elif base_artifact is not None and base_artifact.is_file():
             backup_file_bytes += aligned_size(base_artifact.stat().st_size)
         else:
             # A new target has no rollback copy. Older app_fota versions can
             # fall back to copy mode and need another allocation for it.
             copy_mode_extra_bytes += aligned_size(size)
+        files.append(
+            {
+                "fileName": artifact.name,
+                "fileSize": size,
+                "fileMd5": md5(artifact),
+                "signMethod": "MD5",
+                "target": target,
+            }
+        )
+    if migration_config is not None:
+        artifact = output / "device_migration.json.bin"
+        shutil.copyfile(migration_config, artifact)
+        target = DEVICE_MIGRATION_FILE
+        directories.add(target.rsplit("/", 1)[0])
+        mapping[artifact.name] = target
+        size = artifact.stat().st_size
+        total += aligned_size(size)
+        # The command normally creates a new target. Budget copy-mode staging
+        # as app_fota implementations differ across EC600M firmware revisions.
+        copy_mode_extra_bytes += aligned_size(size)
         files.append(
             {
                 "fileName": artifact.name,
@@ -188,6 +325,7 @@ def build(
             + FILESYSTEM_SAFETY_BYTES
         ),
         "files": files,
+        "containsSecrets": migration_config is not None,
         "extData": {"_package_udi": json.dumps(custom_info, ensure_ascii=False)},
     }
     if legacy_manifest is not None:
@@ -213,6 +351,20 @@ def main() -> int:
             "dist/collector_app_<version>"
         ),
     )
+    parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="only package this allowed source filename (repeatable)",
+    )
+    parser.add_argument(
+        "--migration-config",
+        type=Path,
+        help=(
+            "single-device identity migration JSON; requires --base-version, "
+            "--target-version and an output below private_dist"
+        ),
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--target-version",
@@ -229,12 +381,15 @@ def main() -> int:
     if output is None:
         suffix = "_from_" + args.base_version if args.base_version else ""
         version = args.target_version or VERSION
-        output = ROOT / "dist" / ("collector_app_" + version + suffix)
+        root = PRIVATE_OUTPUT_ROOT if args.migration_config else ROOT / "dist"
+        output = root / ("collector_app_" + version + suffix)
     manifest = build(
         output,
         args.base_version,
         target_version=args.target_version,
         force_include=tuple(args.force_include),
+        migration_config=args.migration_config,
+        include_files=tuple(args.include),
     )
     print("built={}".format(output))
     print("files={}".format(len(manifest["files"])))

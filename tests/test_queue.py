@@ -189,6 +189,99 @@ class QueueTests(unittest.TestCase):
                 self.assertTrue(delivery.acknowledge(value, "flash"))
             self.assertEqual(delivery.stats()["flash_depth"], 0)
 
+    def test_sequence_ceiling_holds_new_records_until_identity_is_confirmed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ram = RawFrameQueue(8)
+            delivery = DeliveryStore(
+                ram,
+                SequenceCounter(path=str(Path(temp) / "seq.json"), save_every=32),
+            )
+            for value in range(4):
+                self.assertTrue(delivery.accept(frame(value), value))
+            self.assertEqual(delivery.highest_accepted_sequence(), 3)
+            delivery.set_send_ceiling(1)
+            for sequence in (0, 1):
+                record = delivery.next_record({})
+                self.assertEqual(record["seq"], sequence)
+                self.assertTrue(delivery.acknowledge(sequence, "ram"))
+            self.assertFalse(delivery.pending_through(1))
+            self.assertIsNone(delivery.next_record({}))
+            self.assertEqual(delivery.stats()["ram_depth"], 2)
+            delivery.clear_send_ceiling()
+            self.assertEqual(delivery.next_record({})["seq"], 2)
+
+    def test_persistent_watermark_routes_new_records_to_flash_atomically(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            ram = RawFrameQueue(8)
+            journal = FlashJournal(
+                str(root / "queue.bin"),
+                str(root / "meta.0"),
+                str(root / "meta.1"),
+                RECORD_SIZE * 8,
+            )
+            delivery = DeliveryStore(
+                ram,
+                SequenceCounter(path=str(root / "seq.json"), save_every=32),
+                journal,
+            )
+            self.assertTrue(delivery.accept(frame(0), 0))
+            self.assertTrue(delivery.accept(frame(1), 1))
+            self.assertEqual(delivery.arm_persistent_watermark(), 1)
+            self.assertTrue(delivery.accept(frame(2), 2))
+            self.assertEqual(ram.depth(), 2)
+            self.assertEqual(journal.depth(), 1)
+            for sequence in (0, 1):
+                record = delivery.next_record({})
+                self.assertEqual(record["seq"], sequence)
+                self.assertTrue(delivery.acknowledge(sequence, "ram"))
+            self.assertIsNone(delivery.next_record({}))
+            delivery.release_persistent_watermark()
+            self.assertFalse(delivery.direct_persist)
+            self.assertEqual(delivery.next_record({})["seq"], 2)
+
+    def test_migration_headroom_stops_at_durable_abort_threshold(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            journal = FlashJournal(
+                str(root / "queue.bin"),
+                str(root / "meta.0"),
+                str(root / "meta.1"),
+                RECORD_SIZE * 8,
+            )
+            delivery = DeliveryStore(
+                RawFrameQueue(8),
+                SequenceCounter(path=str(root / "seq.json"), save_every=32),
+                journal,
+            )
+            self.assertEqual(delivery.migration_flash_headroom(75), 6)
+            self.assertTrue(
+                journal.append_batch(
+                    [{"seq": 1, "timestamp_ms": 1, "frame": frame(1)}]
+                )
+            )
+            self.assertEqual(delivery.migration_flash_headroom(75), 5)
+
+    def test_combined_capacity_threshold_includes_ram_and_flash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            ram = RawFrameQueue(4)
+            journal = FlashJournal(
+                str(root / "queue.bin"),
+                str(root / "meta.0"),
+                str(root / "meta.1"),
+                RECORD_SIZE * 4,
+            )
+            delivery = DeliveryStore(
+                ram,
+                SequenceCounter(path=str(root / "seq.json"), save_every=32),
+                journal,
+            )
+            for value in range(4):
+                self.assertTrue(delivery.accept(frame(value), value))
+            self.assertEqual(delivery.occupancy_percent(), 50)
+            self.assertEqual(delivery.available_frames(), 4)
+
     def test_final_flash_batch_uses_remaining_capacity(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

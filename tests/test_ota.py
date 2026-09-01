@@ -72,6 +72,7 @@ class OtaTests(unittest.TestCase):
             FakeLogger(),
             lambda: True,
             lambda: None,
+            migration_finalize=lambda: True,
             **kwargs,
         )
 
@@ -120,9 +121,57 @@ class OtaTests(unittest.TestCase):
         self.assertFalse(safe_target_path("/usr/collector_config.json"))
         self.assertFalse(safe_target_path("/usr/device.json"))
         self.assertFalse(safe_target_path("/usr/device_secret.json"))
+        self.assertTrue(safe_target_path("/usr/device_migration.json"))
         self.assertFalse(safe_target_path("/usr/data/signs.queue"))
         self.assertFalse(safe_target_path("/usr/.updater/collector_app.py"))
         self.assertFalse(safe_target_path("/usr/../etc/passwd"))
+
+    def test_migration_rollout_packages_use_low_occupancy_gate(self):
+        manager = self.make_manager()
+
+        def task(files):
+            return {
+                "extData": {
+                    "_package_udi": json.dumps({"files": files})
+                }
+            }
+
+        self.assertTrue(
+            manager._is_migration_package(
+                task(
+                    {
+                        "collector_config.py.bin": "/usr/collector_config.py",
+                        "collector_migration.py.bin": "/usr/collector_migration.py",
+                    }
+                )
+            )
+        )
+        self.assertTrue(
+            manager._is_migration_package(
+                task(
+                    {
+                        "collector_config.py.bin": "/usr/collector_config.py",
+                        "collector_migration.py.bin": "/usr/collector_migration.py",
+                        "collector_queue.py.bin": "/usr/collector_queue.py",
+                    }
+                )
+            )
+        )
+        self.assertTrue(
+            manager._is_migration_package(
+                task(
+                    {
+                        "collector_config.py.bin": "/usr/collector_config.py",
+                        "device_migration.json.bin": "/usr/device_migration.json",
+                    }
+                )
+            )
+        )
+        self.assertFalse(
+            manager._is_migration_package(
+                task({"collector_app.py.bin": "/usr/collector_app.py"})
+            )
+        )
 
     def test_ec600m_url_normalization_and_host_check(self):
         source = "https://bucket.oss-cn-shanghai.aliyuncs.com/app.bin?x=1"

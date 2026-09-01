@@ -1,0 +1,41 @@
+{
+  "module": "collector_app",
+  "version": "4.1.0",
+  "baseVersion": "4.0.15",
+  "changedFilesOnly": true,
+  "signMethod": "MD5",
+  "alignedBytes": 86016,
+  "fileAlignedBytes": 77824,
+  "directoryBytes": 8192,
+  "backupAlignedBytes": 53248,
+  "copyModeExtraBytes": 24576,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 200704,
+  "files": [
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 10457,
+      "fileMd5": "293f2d2087e76d34c9b5f15554b7874e",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py"
+    },
+    {
+      "fileName": "collector_migration.py.bin",
+      "fileSize": 24556,
+      "fileMd5": "34cd3ddf9e746460c98c579ef7e64d07",
+      "signMethod": "MD5",
+      "target": "/usr/collector_migration.py"
+    },
+    {
+      "fileName": "collector_queue.py.bin",
+      "fileSize": 40119,
+      "fileMd5": "6c55b0cb40ab69c85c29a6d9cfcbbe71",
+      "signMethod": "MD5",
+      "target": "/usr/collector_queue.py"
+    }
+  ],
+  "containsSecrets": false,
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_migration.py.bin\": \"/usr/collector_migration.py\", \"collector_queue.py.bin\": \"/usr/collector_queue.py\"}}"
+  }
+}

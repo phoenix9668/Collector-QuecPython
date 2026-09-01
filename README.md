@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.0.13`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.0`。
 
 ## 主要能力
 
@@ -11,12 +11,14 @@
 - 针对实机约576 KiB的 `/usr` 分区实际预占256 KiB OTA空间；体征Flash循环队列动态分配、最多96 KiB，且不会挤占OTA预留、安全余量和运行元数据空间。
 - `runtimeLog`、`debugLog`结构化云日志使用独立限速线程和阿里云事件回复确认，本地严重日志双文件合计最多16 KiB。
 - `product_information:UartSampleLog`可远程开启低频UART原始数据预览，默认关闭并保存到 `/usr/collector_settings.json`；统计和错误日志不受开关影响。
+- 支持通过单设备私有OTA命令迁移ProductKey/DeviceName；目标身份先动态注册和事件探测，再以SignsData序号水位线原子切换，失败自动恢复旧身份。
 
 ## 目录
 
 - `src/main.py`：稳定启动和失败回滚入口。
 - `src/collector_*.py`：配置、UART、队列、云连接、OTA、日志和传感器模块。
 - `src/device.example.json`：设备配置模板。
+- `src/device_migration.example.json`：远程身份迁移命令模板；生产副本含ProductSecret，禁止提交。
 - `doc/model.zip`：可直接导入阿里云的物模型；`doc/model/`为可编辑源文件。
 - `doc/Hardware Protocol-Collector Hardware Send Protocol.png`：Collector硬件通信协议图。
 - `fw/QPY_OCPU_EC600M_CNLE_FW_V0006/`：当前EC600M-CN-LE V0606固件及版本说明，根目录同时保留完整压缩包。
@@ -41,13 +43,14 @@
 ```powershell
 python -m unittest discover -s tests -v
 python tools/build_model_zip.py
-python tools/build_ota_package.py --base-version 4.0.12 --output dist/collector_app_4.0.13_from_4.0.12
-python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.14 --force-include collector_ota.py --output dist/collector_app_4.0.14_from_4.0.13
+python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.15 --include collector_app.py --include collector_cloud.py --include collector_config.py --include collector_ota.py --output dist/collector_app_4.0.15
+python tools/build_ota_package.py --base-version 4.0.15 --target-version 4.1.0 --include collector_config.py --include collector_migration.py --include collector_queue.py --output dist/collector_app_4.1.0
+python tools/build_ota_package.py --base-version 4.1.0 --target-version 4.1.1 --migration-config device_migration.json --output private_dist/collector_app_4.1.1_DEVICE_NAME
 ```
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
-物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA构建按每个文件4 KiB、目录8 KiB计入占用，并在清单写入暂存、回滚、updater和安全余量的总需求。576 KiB实机必须按设备当前版本生成变化文件包；阿里云界面仍选择“整包升级”，只上传生成目录清单中的 `.py.bin`。生成的 `aliyun_custom_info.txt` 可原样粘贴到“推送给设备的自定义信息”，平台会自行添加 `_package_udi` 包装。4.0.13正式包需要约280 KiB自升级空间，4.0.14双文件验收包约156 KiB。旧版单文件包只更新稳定启动器，使用前必须确认设备上已经部署配套的 `collector_*.py`。详细上线步骤和实机验收见 `doc/EC600M部署与验收.md`。
+物模型脚本会校验 `doc/model/*.json` 并重建 `doc/model.zip`。OTA构建按每个文件4 KiB、目录8 KiB计入占用，并在清单写入暂存、回滚、updater和安全余量的总需求。576 KiB实机无法一次容纳4.0.13到4.1.0的全部暂存和回滚副本，因此必须依次安装已生成的4.0.15桥接包和4.1.0能力包。阿里云界面仍选择“整包升级”，上传清单列出的全部 `.bin`，并把 `aliyun_custom_info.txt` 原样粘贴到自定义信息。详细步骤见 `doc/EC600M部署与验收.md`。
 
 ## 投递边界
 
@@ -55,4 +58,4 @@ QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌
 
 `SignsData` 使用 MQTT QoS 0 作为非阻塞传输层，并以阿里云 Alink `property/post_reply` 作为端到端确认：只有相同消息ID返回 `code=200` 且 `data` 为空才从队列删除；字段级错误、超时和断线都会保留原消息ID重试。正常发送限速为25条/秒，为阿里云单设备30条/秒上行限额保留余量。
 
-576 KiB分区无法同时长期容纳完整回滚副本、OTA暂存包和高容量体征Flash队列。完整OTA必须在体征源停止发送的维护窗口执行：RAM与Flash积压清空并连续60秒无新体征帧后，程序临时回收空队列和本地日志；下载期间一旦又收到体征帧，会在设置升级标志前取消升级并恢复运行存储。维护窗口需持续到升级重启并完成90秒健康确认。
+576 KiB分区无法同时长期容纳完整回滚副本、OTA暂存包和高容量体征Flash队列。普通完整OTA仍需要RAM与Flash排空并连续60秒无新体征帧。4.0.15桥接完成后，4.1.0能力包和4.1.1迁移命令包改用25%低占用门限并保留Flash队列，不要求UART静默。身份迁移建立序号水位线后，旧身份只排空水位线以前的数据；水位线后的新数据临时直接写入Flash并保持冻结，目标身份事件确认且稳定120秒后才按序释放。总队列或迁移Flash占用达到75%会在溢出前恢复旧身份。

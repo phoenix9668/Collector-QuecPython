@@ -93,6 +93,28 @@ class AppTests(unittest.TestCase):
         self.assertIn("frame_type=B0", extra)
         self.assertLess(len(extra), 400)
 
+    def test_bridge_low_occupancy_gate_supports_legacy_delivery_store(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.cloud = types.SimpleNamespace(connected=True)
+        app.quiet_gate = types.SimpleNamespace(quiet_since_ms=None)
+        app.ram_queue = types.SimpleNamespace(capacity=60, depth=lambda: 10)
+        app.journal = types.SimpleNamespace(capacity=20)
+        app.delivery = types.SimpleNamespace(flash_depth=lambda: 10)
+        self.assertTrue(app._ota_ready(True))
+        app.ram_queue.depth = lambda: 11
+        self.assertFalse(app._ota_ready(True))
+
+    def test_bridge_finalizer_uses_double_check_without_new_queue_api(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.ram_queue = types.SimpleNamespace(depth=lambda: 0)
+        app.delivery = types.SimpleNamespace(
+            accepted=7,
+            flash_depth=lambda: 0,
+        )
+        app.cloud = types.SimpleNamespace(stats=lambda: {"inflight": 0})
+        with patch.object(app_module.utime, "sleep_ms", lambda _value: None):
+            self.assertTrue(app._prepare_migration_reboot())
+
 
 if __name__ == "__main__":
     unittest.main()

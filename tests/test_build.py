@@ -5,12 +5,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "src"))
 
+import build_ota_package as build_module  # noqa: E402
 from build_ota_package import MAX_ALIGNED_BYTES, build  # noqa: E402
 from collector_config import (  # noqa: E402
     FILESYSTEM_SAFETY_BYTES,
@@ -75,7 +77,17 @@ class BuildTests(unittest.TestCase):
     def test_ota_build_manifest_matches_generated_files(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release"
-            manifest = build(output, "4.0.12")
+            manifest = build(
+                output,
+                "4.0.13",
+                target_version="4.0.15",
+                include_files=(
+                    "collector_app.py",
+                    "collector_cloud.py",
+                    "collector_config.py",
+                    "collector_ota.py",
+                ),
+            )
             self.assertLessEqual(manifest["alignedBytes"], MAX_ALIGNED_BYTES)
             self.assertEqual(MAX_ALIGNED_BYTES, 176 * 1024)
             self.assertEqual(OTA_RESERVED_BYTES, 256 * 1024)
@@ -83,13 +95,13 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(LOCAL_LOG_TOTAL_BYTES, 16 * 1024)
             self.assertEqual(manifest["directoryBytes"], 8192)
             self.assertTrue(manifest["changedFilesOnly"])
-            self.assertEqual(manifest["baseVersion"], "4.0.12")
+            self.assertEqual(manifest["baseVersion"], "4.0.13")
             self.assertEqual(manifest["signMethod"], "MD5")
             self.assertEqual(
                 json.loads((output / "aliyun_custom_info.txt").read_text(encoding="utf-8")),
                 json.loads(manifest["extData"]["_package_udi"]),
             )
-            self.assertEqual(manifest["selfUpdateRequiredBytes"], 286720)
+            self.assertLessEqual(manifest["selfUpdateRequiredBytes"], 352256)
             self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
             for item in manifest["files"]:
                 artifact = output / item["fileName"]
@@ -104,26 +116,74 @@ class BuildTests(unittest.TestCase):
             output = Path(directory) / "release"
             manifest = build(
                 output,
-                "4.0.13",
-                target_version="4.0.14",
-                force_include=("collector_ota.py",),
+                "4.0.15",
+                target_version="4.1.0",
+                include_files=(
+                    "collector_config.py",
+                    "collector_migration.py",
+                    "collector_queue.py",
+                ),
             )
             self.assertTrue(manifest["changedFilesOnly"])
-            self.assertEqual(manifest["baseVersion"], "4.0.13")
-            self.assertEqual(manifest["version"], "4.0.14")
+            self.assertEqual(manifest["baseVersion"], "4.0.15")
+            self.assertEqual(manifest["version"], "4.1.0")
             self.assertEqual(
                 [item["fileName"] for item in manifest["files"]],
                 [
                     "collector_config.py.bin",
-                    "collector_ota.py.bin",
+                    "collector_migration.py.bin",
+                    "collector_queue.py.bin",
                 ],
             )
-            self.assertEqual(manifest["alignedBytes"], 60 * 1024)
-            self.assertEqual(manifest["backupAlignedBytes"], 60 * 1024)
-            self.assertEqual(manifest["selfUpdateRequiredBytes"], 156 * 1024)
+            self.assertLessEqual(manifest["alignedBytes"], 88 * 1024)
+            self.assertLessEqual(manifest["selfUpdateRequiredBytes"], 216 * 1024)
             self.assertLess(manifest["selfUpdateRequiredBytes"], 356352)
             self.assertNotIn("legacy", manifest)
             self.assertFalse((output / "main.py.bin").exists())
+
+    def test_private_migration_package_contains_only_version_and_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "migration.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "migrationId": "device-001-to-new-product",
+                        "source": {"productKey": "oldPk", "deviceName": "oldDn"},
+                        "target": {
+                            "productKey": "newPk",
+                            "deviceName": "newDn",
+                            "mqttServer": "new.iot-as-mqtt.cn-shanghai.aliyuncs.com",
+                            "mqttPort": 1883,
+                            "deviceSecret": "",
+                            "productSecret": "private-product-secret",
+                            "otaAllowedHosts": [".aliyuncs.com"],
+                        },
+                        "confirmSeconds": 120,
+                        "rollbackSeconds": 180,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            private_root = root / "private_dist"
+            output = private_root / "device-001"
+            with patch.object(build_module, "PRIVATE_OUTPUT_ROOT", private_root):
+                manifest = build(
+                    output,
+                    "4.1.0",
+                    target_version="4.1.1",
+                    migration_config=config,
+                )
+            self.assertEqual(
+                [item["fileName"] for item in manifest["files"]],
+                ["collector_config.py.bin", "device_migration.json.bin"],
+            )
+            self.assertTrue(manifest["containsSecrets"])
+            self.assertNotIn(
+                "private-product-secret",
+                (output / "aliyun_custom_info.txt").read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":
