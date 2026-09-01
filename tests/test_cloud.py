@@ -126,6 +126,25 @@ class CloudAckTests(unittest.TestCase):
             self.assertEqual(cloud.stats()["inflight"], 0)
             self.assertEqual(cloud.stats()["post_reply_success"], 2)
 
+    def test_ota_mode_clears_business_work_and_keeps_raw_mqtt_available(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cloud, delivery, published = self.make_cloud(temp)
+            self.assertTrue(delivery.accept(signs_frame(1), 1000))
+            record = delivery.next_record({})
+            self.assertTrue(cloud._send_record(record))
+            cloud.defer_properties({"Temperature": 20})
+            dropped = cloud.enter_ota_mode()
+            self.assertEqual(dropped, 2)
+            self.assertEqual(cloud.stats()["inflight"], 0)
+            self.assertEqual(cloud.stats()["deferred"], 0)
+            self.assertEqual(cloud.stats()["ota_exclusive"], 1)
+            self.assertFalse(cloud.publish_properties({"Temperature": 21}))
+            self.assertFalse(cloud.defer_properties({"Temperature": 22}))
+            cloud._delivery_cycle()
+            self.assertEqual(len(published), 1)
+            self.assertTrue(cloud.exit_ota_mode())
+            self.assertEqual(cloud.stats()["ota_exclusive"], 0)
+
     def test_timeout_reuses_the_exact_message_id_and_payload(self):
         with tempfile.TemporaryDirectory() as temp:
             cloud, delivery, published = self.make_cloud(temp)

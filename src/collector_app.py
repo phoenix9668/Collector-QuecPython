@@ -11,7 +11,6 @@ from collector_config import (
     FLASH_SPOOL_META_1,
     INFLIGHT_LIMIT,
     OTA_HEALTH_CONFIRM_SECONDS,
-    OTA_QUIET_SECONDS,
     OTA_RESERVED_BYTES,
     PROJECT_NAME,
     PROJECT_VERSION,
@@ -32,6 +31,9 @@ except ImportError:
         def __init__(self, *_args):
             pass
 
+        def has_pending(self):
+            return False
+
         def start(self):
             pass
 from collector_ota import OtaBootGuard, OtaManager
@@ -48,46 +50,25 @@ from collector_sensors import SensorService
 from collector_uart import UartPipeline
 
 
-class OtaQuietGate:
-    def __init__(self, delivery):
-        self.delivery = delivery
-        self.quiet_since_ms = None
-        self.last_accepted = delivery.accepted
-
-    def ready(self):
-        accepted = self.delivery.accepted
-        quiet = (
-            self.delivery.flash_depth() == 0
-            and self.delivery.ram.depth() == 0
-            and accepted == self.last_accepted
-        )
-        now = utime.ticks_ms()
-        if not quiet:
-            self.quiet_since_ms = None
-            self.last_accepted = accepted
-            return False
-        if self.quiet_since_ms is None:
-            self.quiet_since_ms = now
-            return False
-        return utime.ticks_diff(now, self.quiet_since_ms) >= OTA_QUIET_SECONDS * 1000
-
-
 class CollectorApplication:
     def __init__(self):
         # A committed migration must select its target identity before
         # device.json is parsed and before any MQTT worker can start.
         recover_identity_before_load()
         self.storage = StorageBudget()
-        reserve_ready = self.storage.ensure_reserve()
-        self.logger = StructuredLogger()
         self.pending_ota = OtaBootGuard.load_pending()
+        # During the post-update health window the rollback copies and the
+        # 256 KiB reserve cannot coexist on the EC600M's 576 KiB /usr
+        # partition.  This is an expected temporary state: defer allocation
+        # until mark_healthy() removes the rollback tree instead of attempting
+        # a reservation that is guaranteed to fail and reporting a false
+        # storage error.
+        reserve_ready = (
+            False if self.pending_ota else self.storage.ensure_reserve()
+        )
+        self.logger = StructuredLogger()
         if not reserve_ready:
-            self.logger.error(
-                "storage", "OTA_RESERVE",
-                "Unable to reserve {} KiB; new Flash spool allocation is disabled".format(
-                    OTA_RESERVED_BYTES // 1024
-                ),
-            )
+            self._report_reserve_unavailable(startup=True)
 
         self.ram_queue = self._allocate_ram_queue()
         existing_spool_bytes = file_size(FLASH_SPOOL_FILE)
@@ -109,16 +90,28 @@ class CollectorApplication:
                     "storage", "SPOOL_INIT", "Flash SignsData spool initialization failed"
                 )
         else:
-            self.logger.warn(
-                "storage", "SPOOL_DISABLED",
-                "Flash SignsData spool is unavailable; only the RAM queue is active"
-            )
+            if self.pending_ota:
+                self.logger.info(
+                    "storage", "SPOOL_DEFERRED",
+                    "Flash SignsData spool is deferred until OTA health confirmation",
+                )
+            else:
+                self.logger.warn(
+                    "storage", "SPOOL_DISABLED",
+                    "Flash SignsData spool is unavailable; only the RAM queue is active"
+                )
 
         initial_sequence = 0
         if self.journal and self.journal.last_seq >= 0:
             initial_sequence = self.journal.last_seq + 1
         self.sequence = SequenceCounter(initial=initial_sequence)
         self.delivery = DeliveryStore(self.ram_queue, self.sequence, self.journal)
+        self.ota_exclusive = False
+        self.migration_mode = False
+        self.migration_started = False
+        self._ota_legacy_cloud_methods = None
+        self._ota_legacy_sensor_methods = None
+        self._ota_legacy_accept = None
         self.config = load_device_config()
         self.cloud = CloudClient(self.config, self.delivery, self.logger)
         self.migration = MigrationManager(
@@ -128,7 +121,6 @@ class CollectorApplication:
             self.logger,
             self._reboot,
         )
-        self.quiet_gate = OtaQuietGate(self.delivery)
         self.ota = OtaManager(
             self.config,
             self.storage,
@@ -140,7 +132,8 @@ class CollectorApplication:
             storage_prepare=self._prepare_ota_storage,
             storage_restore=self._restore_runtime_storage,
             activity_provider=lambda: self.delivery.accepted,
-            migration_finalize=self._prepare_migration_reboot,
+            exclusive_enter=self._enter_ota_mode,
+            exclusive_exit=self._exit_ota_mode,
         )
         self.cloud.attach_ota(self.ota)
         self.logger.attach_cloud(self.cloud.publish_event, self.cloud.context)
@@ -148,6 +141,9 @@ class CollectorApplication:
         self.last_uart_rx_sample_id = 0
         self.last_uart_frame_sample_id = 0
         self.sensors = SensorService(self.config, self.cloud, self.logger)
+        self.migration_mode = bool(self.migration.has_pending())
+        if self.migration_mode:
+            self._pause_business("migration", stop_migration=False, pause_logs=False)
 
     def _allocate_ram_queue(self):
         last_error = None
@@ -164,91 +160,204 @@ class CollectorApplication:
                     pass
         raise MemoryError("cannot allocate minimum SignsData queue: {}".format(last_error))
 
-    def _ota_ready(self, migration_package=False):
-        if not self.cloud.connected:
-            self.quiet_gate.quiet_since_ms = None
-            return False
-        if migration_package:
-            occupancy = getattr(self.delivery, "occupancy_percent", None)
-            if occupancy:
-                return occupancy() <= 25
-            capacity = self.ram_queue.capacity + (
-                self.journal.capacity if self.journal else 0
+    def _report_reserve_unavailable(self, startup=False):
+        """Distinguish the expected OTA health hold from a real space fault."""
+        if self.pending_ota:
+            return self.logger.info(
+                "storage", "OTA_RESERVE_DEFERRED",
+                "OTA reserve allocation is deferred until health confirmation",
+                extra="reserve_kib={},startup={}".format(
+                    OTA_RESERVED_BYTES // 1024, 1 if startup else 0
+                ),
+                rate_limit_s=60,
             )
-            depth = self.ram_queue.depth() + self.delivery.flash_depth()
-            return capacity > 0 and (depth * 100) // capacity <= 25
-        return self.quiet_gate.ready()
+        return self.logger.error(
+            "storage", "OTA_RESERVE",
+            "Full {} KiB OTA reserve is unavailable; spool expansion disabled".format(
+                OTA_RESERVED_BYTES // 1024
+            ),
+            rate_limit_s=60,
+        )
 
-    def _delivery_depth(self):
-        total_depth = getattr(self.delivery, "total_depth", None)
-        if total_depth:
-            return total_depth()
-        return self.ram_queue.depth() + self.delivery.flash_depth()
+    def _ota_ready(self, migration_package=False):
+        # Retained for constructor compatibility with older collector_ota.py.
+        # New OTA code enters exclusive mode immediately and does not call it.
+        return bool(self.cloud.connected)
+
+    def _legacy_discard_delivery(self):
+        """Support the first bridge OTA before collector_queue.py is updated."""
+        if self._ota_legacy_accept is None:
+            self._ota_legacy_accept = self.delivery.accept
+            self.delivery.accept = lambda _frame, _captured_ms: True
+        ram = self.delivery.ram
+        journal = self.delivery.journal
+        ram.lock.acquire()
+        try:
+            if journal:
+                journal.lock.acquire()
+            try:
+                dropped = ram.count
+                for offset in range(ram.count):
+                    index = (ram.head + offset) % ram.capacity
+                    ram.frames[index] = None
+                    ram.sequences[index] = 0
+                    ram.timestamps[index] = 0
+                    ram.states[index] = ram.QUEUED
+                ram.head = 0
+                ram.tail = 0
+                ram.count = 0
+                if journal:
+                    dropped += journal.count
+                    journal.head = journal.tail
+                    journal.count = 0
+                    journal.acked = {}
+                    journal.peek_failed = False
+                    try:
+                        journal._save_meta()
+                    except Exception:
+                        journal.io_errors += 1
+                self.delivery.send_ceiling = None
+                self.delivery.direct_persist = False
+                return dropped
+            finally:
+                if journal:
+                    journal.lock.release()
+        finally:
+            ram.lock.release()
+
+    def _pause_cloud_business(self):
+        pause = getattr(self.cloud, "enter_ota_mode", None)
+        if pause:
+            return pause()
+        # 4.1.0 bridge fallback: replace only business methods on this cloud
+        # instance. publish_raw remains intact for OTA progress/download.
+        if self._ota_legacy_cloud_methods is None:
+            self._ota_legacy_cloud_methods = (
+                self.cloud._delivery_cycle,
+                self.cloud.publish_properties,
+                self.cloud.defer_properties,
+            )
+            self.cloud._delivery_cycle = lambda: None
+            self.cloud.publish_properties = lambda _values, qos=0: False
+            self.cloud.defer_properties = lambda _values: False
+        if self.cloud.state_lock:
+            self.cloud.state_lock.acquire()
+        try:
+            dropped = len(self.cloud.inflight)
+            self.cloud.inflight = {}
+            self.cloud.property_reply_ids = []
+        finally:
+            if self.cloud.state_lock:
+                self.cloud.state_lock.release()
+        return dropped
+
+    def _pause_business(self, reason, stop_migration=False, pause_logs=False):
+        """Stop all data-producing business work and discard its backlog."""
+        if self.ota_exclusive:
+            if stop_migration:
+                self.migration.stop = True
+            if pause_logs:
+                self.logger.paused = True
+            return True
+        self.ota_exclusive = True
+        if stop_migration:
+            self.migration.stop = True
+        cloud_dropped = self._pause_cloud_business()
+        discard = getattr(self.delivery, "discard_all", None)
+        data_dropped = discard() if discard else self._legacy_discard_delivery()
+        pause_uart = getattr(self.uart, "pause_for_ota", None)
+        if pause_uart:
+            pause_uart()
+        else:
+            self.uart.stop = True
+            try:
+                self.uart.uart.set_callback(None)
+            except Exception:
+                pass
+        pause_sensors = getattr(self.sensors, "pause_for_ota", None)
+        if pause_sensors:
+            pause_sensors()
+        elif self._ota_legacy_sensor_methods is None:
+            # Bridge fallback for the already-installed 4.1.0 sensor module.
+            self._ota_legacy_sensor_methods = (
+                self.sensors._wait_cloud,
+                self.sensors._publish_cycle,
+            )
+            self.sensors._wait_cloud = lambda: False
+            self.sensors._publish_cycle = lambda include_sim=False: False
+        self.logger.paused = bool(pause_logs)
+        try:
+            print(
+                "[{}] exclusive mode: UART/business stopped; discarded={} inflight={}".format(
+                    str(reason).upper(), data_dropped, cloud_dropped
+                )
+            )
+        except Exception:
+            pass
+        return True
+
+    def _enter_ota_mode(self, _task=None):
+        """Give OTA exclusive ownership until failure recovery or reboot."""
+        return self._pause_business(
+            "ota", stop_migration=True, pause_logs=True
+        )
+
+    def _exit_ota_mode(self):
+        """Resume normal work only when an OTA attempt failed before reboot."""
+        resume = getattr(self.delivery, "resume_accepting", None)
+        if resume:
+            resume()
+        elif self._ota_legacy_accept is not None:
+            self.delivery.accept = self._ota_legacy_accept
+            self._ota_legacy_accept = None
+        resume_cloud = getattr(self.cloud, "exit_ota_mode", None)
+        if resume_cloud:
+            resume_cloud()
+        elif self._ota_legacy_cloud_methods is not None:
+            (
+                self.cloud._delivery_cycle,
+                self.cloud.publish_properties,
+                self.cloud.defer_properties,
+            ) = self._ota_legacy_cloud_methods
+            self._ota_legacy_cloud_methods = None
+        resume_uart = getattr(self.uart, "resume_after_ota", None)
+        if resume_uart:
+            resume_uart()
+        else:
+            self.uart.stop = False
+            try:
+                self.uart.uart.set_callback(self.uart._callback)
+                _thread.start_new_thread(self.uart._parser_worker, ())
+            except Exception:
+                pass
+        resume_sensors = getattr(self.sensors, "resume_after_ota", None)
+        if resume_sensors:
+            resume_sensors()
+        elif self._ota_legacy_sensor_methods is not None:
+            self.sensors._wait_cloud, self.sensors._publish_cycle = (
+                self._ota_legacy_sensor_methods
+            )
+            self._ota_legacy_sensor_methods = None
+        self.migration.stop = False
+        self.logger.paused = False
+        self.ota_exclusive = False
+        return True
 
     def _prepare_ota_storage(self, migration_package=False):
-        """Reclaim only an empty Flash spool; UART continues into the RAM queue."""
-        if migration_package:
-            # The two-file identity command is deliberately small. Keep the
-            # persistent SignsData journal attached so continuous multi-collar
-            # traffic does not need a 60-second silent UART window.
-            return True
-        if self.delivery.flash_depth() or self.delivery.ram.depth():
-            return False
+        """Drop business data and reclaim its Flash allocation for any OTA."""
+        discard = getattr(self.delivery, "discard_all", None)
+        if discard:
+            discard()
+        else:
+            self._legacy_discard_delivery()
         if not self.delivery.detach_empty_journal():
             return False
         self.journal = None
         self.logger.clear_persistent()
         return True
 
-    def _prepare_migration_reboot(self):
-        """Drain without requiring UART silence, then persist the reboot gap."""
-        started = utime.ticks_ms()
-        next_log = started
-        timeout_ms = 30 * 60 * 1000
-        while utime.ticks_diff(utime.ticks_ms(), started) < timeout_ms:
-            now = utime.ticks_ms()
-            cloud_inflight = self.cloud.stats()["inflight"]
-            if self._delivery_depth() == 0 and cloud_inflight == 0:
-                arm = getattr(
-                    self.delivery, "arm_ota_persistence_if_empty", None
-                )
-                if arm:
-                    if arm():
-                        return True
-                else:
-                    # 4.0.15 deliberately retains the smaller 4.0.13 queue
-                    # module. A double check leaves only the few milliseconds
-                    # between this return and app_fota's update flag/reboot.
-                    marker = self.delivery.accepted
-                    utime.sleep_ms(50)
-                    if (
-                        marker == self.delivery.accepted
-                        and self._delivery_depth() == 0
-                        and self.cloud.stats()["inflight"] == 0
-                    ):
-                        return True
-            if utime.ticks_diff(now, next_log) >= 0:
-                try:
-                    print(
-                        "[OTA] waiting for SignsData drain ram={} flash={} inflight={}".format(
-                            self.delivery.ram.depth(),
-                            self.delivery.flash_depth(),
-                            cloud_inflight,
-                        )
-                    )
-                except Exception:
-                    pass
-                next_log = now + 60000
-            utime.sleep_ms(200)
-        return False
-
     def _restore_runtime_storage(self):
         """Restore the reserve and Flash spool after OTA failure/health confirm."""
-        disable_direct = getattr(
-            self.delivery, "disable_direct_persistence", None
-        )
-        if disable_direct:
-            disable_direct()
         if not self.storage.restore_reserve():
             return False
         if self.delivery.journal is not None:
@@ -291,7 +400,7 @@ class CollectorApplication:
     def _heartbeat_worker(self):
         while True:
             utime.sleep(120)
-            if self.cloud.connected:
+            if self.cloud.connected and not self.ota_exclusive:
                 try:
                     self.uart.write(b"Heartbeat")
                 except Exception as error:
@@ -303,6 +412,9 @@ class CollectorApplication:
         """Persist batches independently of UART parsing and MQTT publishing."""
         cycles = 0
         while True:
+            if self.ota_exclusive:
+                utime.sleep_ms(100)
+                continue
             try:
                 cycles += 1
                 if cycles >= 50:
@@ -310,18 +422,10 @@ class CollectorApplication:
                     cycles = 0
                 ram_depth = self.ram_queue.depth()
                 cloud_stats = self.cloud.stats()
-                migration_hold = (
-                    getattr(self.delivery, "send_ceiling", None) is not None
-                )
-                direct_persist = getattr(
-                    self.delivery, "direct_persist", False
-                )
                 should_spill = (
-                    not direct_persist
-                    and ram_depth >= (1 if migration_hold else SPILL_BATCH_FRAMES)
+                    ram_depth >= SPILL_BATCH_FRAMES
                     and (
-                        migration_hold
-                        or not self.cloud.connected
+                        not self.cloud.connected
                         or self.ram_queue.percent() >= RAM_SPILL_HIGH_WATERMARK
                         or cloud_stats["inflight"] >= INFLIGHT_LIMIT
                     )
@@ -348,6 +452,8 @@ class CollectorApplication:
     def _stats_worker(self):
         while True:
             utime.sleep(60)
+            if self.ota_exclusive:
+                continue
             uart_stats = self.uart.stats()
             delivery_stats = self.delivery.stats()
             cloud_stats = self.cloud.stats()
@@ -444,13 +550,7 @@ class CollectorApplication:
                     extra=extra, rate_limit_s=60
                 )
             if not self.storage.reserve_ready and not self.ota.running:
-                self.logger.error(
-                    "storage", "OTA_RESERVE",
-                    "Full {} KiB OTA reserve is unavailable; spool expansion disabled".format(
-                        OTA_RESERVED_BYTES // 1024
-                    ),
-                    rate_limit_s=60,
-                )
+                self._report_reserve_unavailable()
 
     def _log_uart_sample(self, uart_stats):
         rx_sample_id = uart_stats["rx_sample_id"]
@@ -491,12 +591,15 @@ class CollectorApplication:
             self.last_uart_frame_sample_id = frame_sample_id
 
     def _health_worker(self):
+        if not self.pending_ota:
+            return
         # The stable bootstrap enforces a 120-second rollback deadline. Mark
         # healthy earlier so filesystem scheduling cannot create a boundary
         # race between confirmation and rollback.
         utime.sleep(OTA_HEALTH_CONFIRM_SECONDS)
         if OtaBootGuard.mark_healthy():
-            self._restore_runtime_storage()
+            storage_restored = self._restore_runtime_storage()
+            self.pending_ota = None
             try:
                 print(
                     "[OTA] version={} health confirmation completed".format(
@@ -509,6 +612,20 @@ class CollectorApplication:
                 "ota", "collector", "application", "healthy", "device",
                 "Application health window completed"
             )
+            if getattr(self, "migration_mode", False):
+                self._start_migration()
+            if not storage_restored:
+                self.logger.error(
+                    "storage", "OTA_RESERVE_RESTORE",
+                    "OTA health confirmation completed but reserve/Flash spool restore failed",
+                )
+
+    def _start_migration(self):
+        if self.migration_started:
+            return False
+        self.migration_started = True
+        self.migration.start()
+        return True
 
     def start(self):
         if self.pending_ota:
@@ -531,12 +648,18 @@ class CollectorApplication:
                 self.journal.capacity if self.journal else 0,
             ),
         )
-        self.uart.start()
+        if not self.migration_mode:
+            self.uart.start()
         _thread.start_new_thread(self._storage_worker, ())
         self.cloud.start()
-        self.migration.start()
+        # A migration delivered by this OTA is started only after the new app
+        # passes its rollback health window. Otherwise its intentional reboot
+        # would look like an application crash to the stable bootstrap.
+        if not self.migration_mode or not self.pending_ota:
+            self._start_migration()
         self.ota.start()
-        self.sensors.start()
+        if not self.migration_mode:
+            self.sensors.start()
         _thread.start_new_thread(self._watchdog_worker, ())
         _thread.start_new_thread(self._heartbeat_worker, ())
         _thread.start_new_thread(self._stats_worker, ())

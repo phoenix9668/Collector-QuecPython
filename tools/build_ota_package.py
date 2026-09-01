@@ -49,7 +49,10 @@ def validate_migration_config(path: Path) -> dict:
     migration_id = str(data.get("migrationId", "")).strip()
     if not migration_id or len(migration_id) > 64:
         raise ValueError("migration config has invalid migrationId")
-    if any(not (char.isalnum() or char in "-_.") for char in migration_id):
+    migration_id_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+    )
+    if any(char not in migration_id_chars for char in migration_id):
         raise ValueError("migration config has invalid migrationId")
     source = data.get("source", {})
     target = data.get("target", {})
@@ -110,7 +113,9 @@ def validate_migration_config(path: Path) -> dict:
 
 
 def _base_directory(
-    base_version: str | None, target_version: str
+    base_version: str | None,
+    target_version: str,
+    allow_missing: bool = False,
 ) -> Path | None:
     if not base_version:
         return None
@@ -119,6 +124,12 @@ def _base_directory(
     directory = ROOT / "dist" / ("collector_app_" + base_version)
     manifest_path = directory / "manifest.json"
     if not manifest_path.is_file():
+        if allow_missing:
+            # Per-device migration packages are intentionally kept out of
+            # Git, so an installed private base may have no public dist
+            # manifest.  The caller will budget every selected target as a
+            # rollback copy instead of assuming that it is a fresh install.
+            return None
         raise FileNotFoundError("missing base OTA manifest: {}".format(manifest_path))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("module") != MODULE_NAME or manifest.get("version") != base_version:
@@ -161,7 +172,16 @@ def build(
     forced = set(force_include)
     selected = set(include_files)
     if migration_config is not None and not selected:
-        selected = {"collector_config.py"}
+        # A private migration package must also carry the exclusive OTA and
+        # simplified migration state machines. Shipping only the version and
+        # command would leave a 4.1.0 device running the removed watermark
+        # implementation.
+        selected = {
+            "collector_app.py",
+            "collector_config.py",
+            "collector_migration.py",
+            "collector_ota.py",
+        }
     if migration_config is not None:
         if not base_version or not target_version:
             raise ValueError(
@@ -198,7 +218,11 @@ def build(
     manifest_path = output / "manifest.json"
     if manifest_path.exists():
         manifest_path.unlink()
-    base_directory = _base_directory(base_version, target_version)
+    base_directory = _base_directory(
+        base_version,
+        target_version,
+        allow_missing=migration_config is not None,
+    )
     sources = [SOURCE / Path(target).name for target in MULTI_FILE_TARGETS]
     files = []
     mapping = {}
@@ -289,7 +313,7 @@ def build(
         )
 
     legacy_manifest = None
-    if base_directory is None:
+    if base_version is None:
         main_source = SOURCE / "main.py"
         compile(main_source.read_text(encoding="utf-8"), str(main_source), "exec")
         legacy = output / "main.py.bin"
@@ -307,7 +331,7 @@ def build(
         "module": MODULE_NAME,
         "version": target_version,
         "baseVersion": base_version,
-        "changedFilesOnly": base_directory is not None,
+        "changedFilesOnly": base_version is not None,
         "signMethod": "MD5",
         "alignedBytes": total,
         "fileAlignedBytes": file_aligned_bytes,

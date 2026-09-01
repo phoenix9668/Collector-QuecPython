@@ -101,6 +101,15 @@ class SensorService:
         self.adc = None
         self.battery = 0.0
         self.power = 0.0
+        self.ota_paused = False
+
+    def pause_for_ota(self):
+        self.ota_paused = True
+        return True
+
+    def resume_after_ota(self):
+        self.ota_paused = False
+        return True
 
     def start(self):
         try:
@@ -119,8 +128,9 @@ class SensorService:
         _thread.start_new_thread(self._location_worker, ())
 
     def _wait_cloud(self):
-        while not self.cloud.connected:
+        while not self.cloud.connected and not self.ota_paused:
             utime.sleep(1)
+        return not self.ota_paused
 
     def _collect_sensor_values(self):
         values = {}
@@ -167,6 +177,8 @@ class SensorService:
             return {}
 
     def _publish_cycle(self, include_sim=False):
+        if self.ota_paused:
+            return False
         values = self._collect_sensor_values()
         if include_sim:
             values.update(self._collect_sim_values())
@@ -183,7 +195,9 @@ class SensorService:
     def _sensor_worker(self):
         startup_pending = True
         while True:
-            self._wait_cloud()
+            if not self._wait_cloud():
+                utime.sleep(1)
+                continue
             if self._publish_cycle(include_sim=startup_pending):
                 startup_pending = False
                 utime.sleep(self.SENSOR_INTERVAL_SECONDS)
@@ -194,7 +208,9 @@ class SensorService:
         # The sensor worker includes SIM identity in the startup snapshot.
         utime.sleep(self.SIM_INTERVAL_SECONDS)
         while True:
-            self._wait_cloud()
+            if not self._wait_cloud():
+                utime.sleep(1)
+                continue
             values = self._collect_sim_values()
             try:
                 published = bool(values) and self.cloud.publish_properties(values)
@@ -212,6 +228,8 @@ class SensorService:
         # the original EC600M Collector application.
         while True:
             utime.sleep(86400)
+            if self.ota_paused:
+                continue
             try:
                 location = cellLocator.getLocation(
                     CELL_LOCATOR_HOST,

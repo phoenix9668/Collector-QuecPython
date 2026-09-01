@@ -22,14 +22,8 @@ from collector_config import (
     DEVICE_CONFIG_FILE,
     DEVICE_MIGRATION_FILE,
     DEVICE_SECRET_CACHE_FILE,
-    MIGRATION_ABORT_PERCENT,
-    MIGRATION_ARM_MAX_PERCENT,
-    MIGRATION_ARM_WAIT_SECONDS,
     MIGRATION_CONFIRM_SECONDS,
     MIGRATION_DONE_FILE,
-    MIGRATION_MIN_FREE_FRAMES,
-    MIGRATION_PREFIX_TIMEOUT_SECONDS,
-    MIGRATION_RATE_SAFETY_PERCENT,
     MIGRATION_ROLLBACK_SECONDS,
     MIGRATION_STATE_0,
     MIGRATION_STATE_1,
@@ -216,8 +210,12 @@ def _valid_migration_id(value):
     value = str(value).strip()
     if not value or len(value) > 64:
         return ""
+    # EC600M's reduced QuecPython ``str`` implementation does not provide the
+    # CPython alphanumeric helper. Keep this validator deliberately ASCII-only so it
+    # behaves identically on the module and in the host tests.
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
     for char in value:
-        if not (char.isalnum() or char in "-_."):
+        if char not in allowed:
             return ""
     return value
 
@@ -342,11 +340,10 @@ class MigrationManager:
         self.reboot = reboot
         self.stop = False
         self.state = load_migration_state()
-        self.storage_ready = True
-        if self.state and self.state.get("stage") in ("committed", "confirming"):
-            self.storage_ready = self.delivery.resume_persistent_watermark(
-                int(self.state.get("cutoverSeq", -1))
-            )
+
+    def has_pending(self):
+        """Return whether startup must stay in migration-only mode."""
+        return bool(self.state or _read_json(DEVICE_MIGRATION_FILE))
 
     def start(self):
         if _thread:
@@ -400,39 +397,7 @@ class MigrationManager:
         source_secret = _read_json(DEVICE_SECRET_CACHE_FILE)
         return self.config.as_dict(include_device_secret=True), source_secret
 
-    def _capacity_ready(self):
-        if self.delivery.occupancy_percent() > MIGRATION_ARM_MAX_PERCENT:
-            return False, "queue occupancy exceeds {}%".format(
-                MIGRATION_ARM_MAX_PERCENT
-            )
-        one_rate, five_rate = self.delivery.acceptance_rates()
-        rate = max(one_rate, five_rate)
-        required = max(
-            MIGRATION_MIN_FREE_FRAMES,
-            int(
-                rate
-                * MIGRATION_ROLLBACK_SECONDS
-                * MIGRATION_RATE_SAFETY_PERCENT
-                / 100.0
-                + 0.999
-            ),
-        )
-        available = self.delivery.available_frames()
-        if available < required:
-            return False, "free frames {}/{} required".format(available, required)
-        durable = self.delivery.migration_flash_headroom(MIGRATION_ABORT_PERCENT)
-        if durable < required:
-            return False, "durable Flash headroom {}/{} required".format(
-                durable, required
-            )
-        return True, (
-            "occupancy={}%,free={},durable={},required={},rate={:.3f}"
-        ).format(
-            self.delivery.occupancy_percent(), available, durable, required, rate
-        )
-
     def _abort_precommit(self, code, reason):
-        self.delivery.release_persistent_watermark()
         try:
             if self.state and self.state.get("sourceConfig"):
                 _identity_from_state(self.state, False)
@@ -441,6 +406,8 @@ class MigrationManager:
         self._debug(code, reason)
         self._done("failed", reason)
         self.state = None
+        sleep_ms(200)
+        self.reboot()
 
     def _rollback(self, code, reason):
         self._save("rollback", failureCode=code, failureReason=str(reason)[:160])
@@ -460,8 +427,6 @@ class MigrationManager:
         self.reboot()
 
     def _commit(self):
-        if not self.delivery.direct_persist:
-            raise OSError("persistent watermark storage is not active")
         self._save("committing")
         self._runtime("commit", "Writing validated target identity")
         self.cloud.stop = True
@@ -485,6 +450,8 @@ class MigrationManager:
         if done and str(done.get("migrationId", "")) == migration_id:
             self._usb("duplicate", "Ignoring completed migration {}".format(migration_id))
             remove_file(DEVICE_MIGRATION_FILE)
+            sleep_ms(200)
+            self.reboot()
             return
         normalized = normalize_migration(command, self.config)
         self._runtime(
@@ -504,7 +471,6 @@ class MigrationManager:
             "sourceSecret": source_secret,
             "targetConfig": normalized["target"],
             "targetSecret": None,
-            "cutoverSeq": -1,
             "confirmSeconds": normalized["confirmSeconds"],
             "rollbackSeconds": normalized["rollbackSeconds"],
         }
@@ -527,61 +493,13 @@ class MigrationManager:
         if not probe_ok:
             raise OSError("target runtimeLog probe was not acknowledged")
         self._save("prepared")
-        self._runtime("ready", "Target identity preflight passed")
-
-        wait_started = ticks_ms()
-        wait_log_ms = None
-        while not self.stop:
-            ready, detail = self._capacity_ready()
-            if ready and self.cloud.connected:
-                self._runtime("capacity", "Migration queue capacity is ready", detail)
-                break
-            now = ticks_ms()
-            if wait_log_ms is None or ticks_diff(now, wait_log_ms) >= 60000:
-                self._usb(
-                    "waiting",
-                    "Waiting for queue capacity and old MQTT: {}".format(detail),
-                )
-                wait_log_ms = now
-            if ticks_diff(ticks_ms(), wait_started) >= MIGRATION_ARM_WAIT_SECONDS * 1000:
-                raise OSError("migration arm timeout: {}".format(detail))
-            sleep_ms(1000)
-
-        cutover = self.delivery.arm_persistent_watermark()
-        if cutover is None:
-            raise OSError("durable Flash journal is unavailable")
-        self._save("armed", cutoverSeq=cutover)
         self._runtime(
-            "watermark",
-            "SignsData sequence watermark armed",
-            "cutover_seq={}".format(cutover),
+            "ready",
+            "Target identity preflight passed; business data remains disabled",
         )
-        self._runtime("drain", "Draining old identity SignsData prefix")
-        drain_started = ticks_ms()
-        while not self.stop:
-            if self.delivery.migration_occupancy_percent() >= MIGRATION_ABORT_PERCENT:
-                raise OSError("queue reached migration abort threshold")
-            inflight = self.cloud.stats()["inflight"]
-            if not self.delivery.pending_through(cutover) and inflight == 0:
-                self._runtime("drained", "Old identity SignsData prefix acknowledged")
-                self._commit()
-                return
-            if ticks_diff(ticks_ms(), drain_started) >= (
-                MIGRATION_PREFIX_TIMEOUT_SECONDS * 1000
-            ):
-                raise OSError("old SignsData prefix drain timed out")
-            sleep_ms(200)
+        self._commit()
 
     def _confirm_target(self):
-        cutover = int(self.state.get("cutoverSeq", -1))
-        if not self.delivery.direct_persist:
-            self.storage_ready = self.delivery.resume_persistent_watermark(cutover)
-        if not self.storage_ready:
-            self._rollback(
-                "STORAGE_UNAVAILABLE",
-                "durable Flash journal unavailable after identity commit",
-            )
-            return
         first_epoch = int(self.state.get("confirmStartedEpoch", 0))
         now_epoch = epoch_seconds()
         elapsed = (
@@ -589,7 +507,13 @@ class MigrationManager:
             if first_epoch and now_epoch >= first_epoch
             else 0
         )
-        remaining_seconds = MIGRATION_ROLLBACK_SECONDS - elapsed
+        rollback_seconds = int(
+            self.state.get("rollbackSeconds", MIGRATION_ROLLBACK_SECONDS)
+        )
+        confirm_seconds = int(
+            self.state.get("confirmSeconds", MIGRATION_CONFIRM_SECONDS)
+        )
+        remaining_seconds = rollback_seconds - elapsed
         confirm_boots = int(self.state.get("confirmBoots", 0)) + 1
         self._save("confirming", confirmBoots=confirm_boots)
         if remaining_seconds <= 0 or confirm_boots > 3:
@@ -597,8 +521,7 @@ class MigrationManager:
             return
         self._runtime(
             "confirm",
-            "Target identity booted; SignsData remains held at watermark",
-            "cutover_seq={}".format(cutover),
+            "Target identity booted; business data remains disabled",
         )
         started = ticks_ms()
         stable_started = None
@@ -607,9 +530,6 @@ class MigrationManager:
         last_probe_ms = None
         while not self.stop:
             now = ticks_ms()
-            if self.delivery.migration_occupancy_percent() >= MIGRATION_ABORT_PERCENT:
-                self._rollback("QUEUE_HIGH", "queue reached 75% during confirmation")
-                return
             if ticks_diff(now, started) >= remaining_seconds * 1000:
                 self._rollback("CONFIRM_TIMEOUT", "target confirmation timed out")
                 return
@@ -644,16 +564,16 @@ class MigrationManager:
                 probe_id = self.cloud.publish_event_tracked("runtimeLog", params)
                 last_probe_ms = now
             if stable_started is not None and ticks_diff(now, stable_started) >= (
-                MIGRATION_CONFIRM_SECONDS * 1000
+                confirm_seconds * 1000
             ):
-                self._done("success")
-                self.state = None
-                self.delivery.release_persistent_watermark()
                 self._runtime(
                     "success",
-                    "Target identity stable; held SignsData delivery released",
-                    "cutover_seq={}".format(cutover),
+                    "Target identity stable; migration completed",
                 )
+                self._done("success")
+                self.state = None
+                sleep_ms(200)
+                self.reboot()
                 return
             sleep_ms(200)
 

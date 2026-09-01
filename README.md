@@ -1,6 +1,6 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.0`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.2`。
 
 ## 主要能力
 
@@ -11,7 +11,7 @@
 - 针对实机约576 KiB的 `/usr` 分区实际预占256 KiB OTA空间；体征Flash循环队列动态分配、最多96 KiB，且不会挤占OTA预留、安全余量和运行元数据空间。
 - `runtimeLog`、`debugLog`结构化云日志使用独立限速线程和阿里云事件回复确认，本地严重日志双文件合计最多16 KiB。
 - `product_information:UartSampleLog`可远程开启低频UART原始数据预览，默认关闭并保存到 `/usr/collector_settings.json`；统计和错误日志不受开关影响。
-- 支持通过单设备私有OTA命令迁移ProductKey/DeviceName；目标身份先动态注册和事件探测，再以SignsData序号水位线原子切换，失败自动恢复旧身份。
+- 支持通过单设备私有OTA命令迁移ProductKey/DeviceName；迁移期间全部业务采集和上报保持停止，目标身份先动态注册和事件探测，再原子切换，失败自动恢复旧身份。
 
 ## 目录
 
@@ -45,7 +45,8 @@ python -m unittest discover -s tests -v
 python tools/build_model_zip.py
 python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.15 --include collector_app.py --include collector_cloud.py --include collector_config.py --include collector_ota.py --output dist/collector_app_4.0.15
 python tools/build_ota_package.py --base-version 4.0.15 --target-version 4.1.0 --include collector_config.py --include collector_migration.py --include collector_queue.py --output dist/collector_app_4.1.0
-python tools/build_ota_package.py --base-version 4.1.0 --target-version 4.1.1 --migration-config device_migration.json --output private_dist/collector_app_4.1.1_DEVICE_NAME
+python tools/build_ota_package.py --base-version 4.1.0 --target-version 4.1.1 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.1_DEVICE_NAME
+python tools/build_ota_package.py --base-version 4.1.1 --target-version 4.1.2 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.2_DEVICE_NAME
 ```
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
@@ -54,8 +55,10 @@ QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌
 
 ## 投递边界
 
-在设备持续供电、UART硬件正常且积压不超过启动日志公布的RAM+Flash容量时，程序不会静默丢包。Flash数据可跨重启恢复；仅存在于RAM的数据无法抵御突然断电。回复丢失会使用相同消息ID重试，因此服务端可能收到重复数据，应按设备和消息ID幂等处理。
+正常运行时，在设备持续供电、UART硬件正常且积压不超过启动日志公布的RAM+Flash容量的前提下，程序不会静默丢包。Flash数据可跨重启恢复；仅存在于RAM的数据无法抵御突然断电。回复丢失会使用相同消息ID重试，因此服务端可能收到重复数据，应按设备和消息ID幂等处理。
 
 `SignsData` 使用 MQTT QoS 0 作为非阻塞传输层，并以阿里云 Alink `property/post_reply` 作为端到端确认：只有相同消息ID返回 `code=200` 且 `data` 为空才从队列删除；字段级错误、超时和断线都会保留原消息ID重试。正常发送限速为25条/秒，为阿里云单设备30条/秒上行限额保留余量。
 
-576 KiB分区无法同时长期容纳完整回滚副本、OTA暂存包和高容量体征Flash队列。普通完整OTA仍需要RAM与Flash排空并连续60秒无新体征帧。4.0.15桥接完成后，4.1.0能力包和4.1.1迁移命令包改用25%低占用门限并保留Flash队列，不要求UART静默。身份迁移建立序号水位线后，旧身份只排空水位线以前的数据；水位线后的新数据临时直接写入Flash并保持冻结，目标身份事件确认且稳定120秒后才按序释放。总队列或迁移Flash占用达到75%会在溢出前恢复旧身份。
+从修复版4.1.2开始，任何被接受的新版本OTA任务都会立即进入独占模式：停止UART解析、传感器和业务上报，清空RAM、Flash及在途SignsData，并在升级期间丢弃新串口数据；只保留MQTT连接、OTA下载和进度上报。升级失败后恢复空队列运行，升级成功则重启。此处是明确的主动丢数边界。
+
+设备身份迁移同样不再使用序号水位线、25%容量门限或旧队列排空。迁移包重启后业务继续保持停止，先完成目标预注册和探测，再切换身份；目标runtimeLog确认且连接稳定120秒后再次重启并恢复正常业务，失败则恢复旧身份后重启。早期4.1.1在EC600M上因精简版`str`缺少字母数字判断方法而于迁移预检失败；已安装该版本的设备必须定向安装4.1.2修复包。执行这一趟的仍是板内旧OTA代码，可能仍需停止下位机并满足60秒静默；4.1.2运行后，后续升级不再需要该维护窗口。

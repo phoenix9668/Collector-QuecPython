@@ -29,6 +29,18 @@ def make_frame(sequence):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_ota_discard_removes_bytes_already_waiting_for_parser(self):
+        stream = FrameStream(32768)
+        pending = make_frame(1) + make_frame(2)
+        self.assertEqual(stream.feed(pending), len(pending))
+        self.assertEqual(stream.discard_pending(), len(pending))
+        received = []
+        self.assertEqual(
+            stream.drain(lambda frame, _timestamp: received.append(frame)), 0
+        )
+        self.assertEqual(received, [])
+        self.assertEqual(stream.stats()["ring_depth"], 0)
+
     def test_uart_diagnostic_samples_are_bounded_and_show_complete_frames(self):
         stream = FrameStream(32768)
         raw = bytes(range(100))

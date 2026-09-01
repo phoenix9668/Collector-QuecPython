@@ -447,18 +447,23 @@ class OtaManager:
         storage_restore=None,
         activity_provider=None,
         migration_finalize=None,
+        exclusive_enter=None,
+        exclusive_exit=None,
     ):
         self.config = config
         self.storage = storage_budget
         self.publish = publish
         self.logger = logger
-        self.quiet_provider = quiet_provider
+        # quiet_provider, activity_provider, and migration_finalize remain in
+        # the signature so a staged bridge can construct this class. 4.1.1
+        # deliberately ignores all three gates and enters exclusive mode.
         self.reboot = reboot
         self.id_provider = id_provider
         self.storage_prepare = storage_prepare
         self.storage_restore = storage_restore
-        self.activity_provider = activity_provider
-        self.migration_finalize = migration_finalize
+        self.exclusive_enter = exclusive_enter
+        self.exclusive_exit = exclusive_exit
+        self.exclusive_active = False
         self.queue = []
         self.queue_lock = _thread.allocate_lock() if _thread else None
         self.id_lock = _thread.allocate_lock() if _thread else None
@@ -484,15 +489,6 @@ class OtaManager:
             return self.storage_restore()
         return self.storage.restore_reserve()
 
-    def _activity_marker(self):
-        if not self.activity_provider:
-            return None
-        return self.activity_provider()
-
-    def _ensure_activity_unchanged(self, marker):
-        if self.activity_provider and self.activity_provider() != marker:
-            raise OSError("UART activity resumed during OTA")
-
     def _next_id(self):
         if self.id_provider:
             return str(self.id_provider())
@@ -508,6 +504,14 @@ class OtaManager:
     def enqueue(self, data):
         if not isinstance(data, dict):
             return False
+        module = str(data.get("module", ""))
+        version = str(data.get("version", ""))
+        if module != OTA_MODULE_NAME or not is_newer_version(version):
+            self.logger.info(
+                "ota", "VERSION",
+                "Ignore OTA task module={} version={}".format(module, version),
+            )
+            return False
         self._usb_progress(0, "upgrade task received", data.get("version", ""))
         if self.queue_lock:
             self.queue_lock.acquire()
@@ -515,6 +519,17 @@ class OtaManager:
             if len(self.queue) >= 2:
                 self.logger.warn("ota", "QUEUE_FULL", "OTA command queue is full")
                 return False
+            if not self.exclusive_active and self.exclusive_enter:
+                if not self.exclusive_enter(data):
+                    self.logger.error(
+                        "ota", "EXCLUSIVE",
+                        "Unable to enter OTA exclusive mode",
+                    )
+                    self.progress(
+                        -1, "unable to stop business services for OTA", force=True
+                    )
+                    return False
+                self.exclusive_active = True
             self.queue.append(data)
             return True
         finally:
@@ -623,24 +638,6 @@ class OtaManager:
             if not has_item:
                 sleep_ms(200)
                 continue
-            migration_package = self._is_migration_package(
-                self.queue[0] if self.queue else {}
-            )
-            try:
-                try:
-                    quiet_ready = self.quiet_provider(migration_package)
-                except TypeError:
-                    quiet_ready = self.quiet_provider()
-            except Exception as error:
-                self.logger.error(
-                    "ota", "QUIET_GATE", "OTA quiet gate failed",
-                    extra=str(error), rate_limit_s=10
-                )
-                sleep_ms(1000)
-                continue
-            if not quiet_ready:
-                sleep_ms(1000)
-                continue
             if self.queue_lock:
                 self.queue_lock.acquire()
             try:
@@ -655,11 +652,7 @@ class OtaManager:
             try:
                 self.progress(
                     1,
-                    (
-                        "migration package low-occupancy gate satisfied"
-                        if migration_package
-                        else "quiet window satisfied"
-                    ),
+                    "OTA exclusive mode entered; business data discarded",
                     force=True,
                 )
                 self.process(data)
@@ -670,6 +663,16 @@ class OtaManager:
                 remove_tree(OTA_UPDATER_DIR)
                 OtaBootGuard.restore()
                 self._restore_storage()
+                if self.exclusive_exit:
+                    try:
+                        self.exclusive_exit()
+                    except Exception as exit_error:
+                        self.logger.error(
+                            "ota", "EXCLUSIVE_EXIT",
+                            "Unable to resume services after OTA failure",
+                            extra=str(exit_error),
+                        )
+                self.exclusive_active = False
             self.running = False
             self.active_version = ""
 
@@ -706,24 +709,6 @@ class OtaManager:
         package = self._package_info(data)
         mapping = package.get("files", {}) if isinstance(package, dict) else {}
         return mapping if isinstance(mapping, dict) else {}
-
-    def _is_migration_package(self, data):
-        mapping = self._package_mapping(data)
-        targets = set(str(value) for value in mapping.values())
-        command_package = targets == {
-            DEVICE_MIGRATION_FILE, "/usr/collector_config.py"
-        }
-        capability_package = bool(
-            {"/usr/collector_config.py", "/usr/collector_migration.py"}
-            <= targets
-            and targets
-            <= {
-                "/usr/collector_config.py",
-                "/usr/collector_migration.py",
-                "/usr/collector_queue.py",
-            }
-        )
-        return command_package or capability_package
 
     def _build_multi_files(self, data):
         files = data.get("files", [])
@@ -855,10 +840,8 @@ class OtaManager:
 
     def _process_multi(self, data, version):
         files, total = self._build_multi_files(data)
-        migration_package = self._is_migration_package(data)
-        activity_marker = None if migration_package else self._activity_marker()
         try:
-            self._prepare_storage(migration_package)
+            self._prepare_storage(False)
             ota_free = self.storage.ota_free_bytes()
             # app_fota staging and rollback copies coexist. Existing targets may
             # be larger than their replacements, so calculate their actual size.
@@ -914,19 +897,6 @@ class OtaManager:
             valid, reason = self._verify_staged(files)
             if not valid:
                 raise ValueError(reason)
-            if migration_package:
-                self.progress(
-                    96,
-                    "waiting for delivery queue drain before reboot",
-                    force=True,
-                )
-                if not self.migration_finalize:
-                    raise OSError("migration OTA finalizer is unavailable")
-                if not self.migration_finalize():
-                    raise OSError("delivery queue did not drain before OTA reboot")
-                self.progress(98, "reboot gap persistence armed", force=True)
-            else:
-                self._ensure_activity_unchanged(activity_marker)
             try:
                 flag_result = updater.set_update_flag(use_rename=True)
             except TypeError:
@@ -1080,7 +1050,6 @@ class OtaManager:
 
     def _process_single(self, data, version):
         task = self._build_single_task(data, version)
-        activity_marker = self._activity_marker()
         try:
             self._prepare_storage()
             current_size = file_size(MQTT_TARGET_FILE)
@@ -1108,7 +1077,6 @@ class OtaManager:
                 raise OSError("MQTT OTA download failed")
             self.progress(85, "MQTT download completed", force=True)
             self.progress(95, "legacy OTA verified", force=True)
-            self._ensure_activity_unchanged(activity_marker)
             if not self._install_single(task):
                 raise OSError("MQTT OTA verify/install failed")
             self.progress(99, "legacy update installed", force=True)

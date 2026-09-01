@@ -19,6 +19,7 @@ class UartPipeline:
         self.logger = logger
         self.stream = self._allocate_stream()
         self.stop = False
+        self.ota_paused = False
         self.rejected_frames = 0
         self.storage_error_frames = 0
         self.driver_error_events = 0
@@ -75,6 +76,11 @@ class UartPipeline:
                 self.empty_read_events += 1
                 self.last_driver_error = "empty_read={}".format(available)
                 break
+            if self.ota_paused:
+                # OTA owns the device until reboot. Drain the hardware FIFO so
+                # it cannot overflow, but deliberately discard every byte.
+                expected = 0
+                continue
             try:
                 self.stream.feed(data)
             except Exception as error:
@@ -138,6 +144,9 @@ class UartPipeline:
 
     def _parser_worker(self):
         while not self.stop:
+            if self.ota_paused:
+                utime.sleep_ms(20)
+                continue
             try:
                 count = self.stream.drain(
                     self._on_signs,
@@ -162,6 +171,16 @@ class UartPipeline:
             value=self.stream.ring.capacity,
             extra="baud={}".format(UART_BAUDRATE),
         )
+
+    def pause_for_ota(self):
+        """Stop parsing and drain/discard any subsequent UART input."""
+        self.ota_paused = True
+        return self.stream.discard_pending()
+
+    def resume_after_ota(self):
+        """Resume parsing only when an OTA attempt failed before reboot."""
+        self.ota_paused = False
+        return True
 
     def stats(self):
         result = self.stream.stats()

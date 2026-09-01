@@ -105,14 +105,32 @@ class OtaTests(unittest.TestCase):
             self.assertTrue(
                 manager.enqueue(
                     {
-                        "version": "4.0.13",
+                        "module": "collector_app",
+                        "version": "9.0.0",
                         "files": [{"fileUrl": "https://secret.example/signed"}],
                     }
                 )
             )
         text = output.getvalue()
-        self.assertIn("version=4.0.13 progress=0%", text)
+        self.assertIn("version=9.0.0 progress=0%", text)
         self.assertNotIn("secret.example", text)
+
+    def test_enqueue_enters_exclusive_mode_once_and_ignores_old_tasks(self):
+        calls = []
+        manager = self.make_manager(
+            exclusive_enter=lambda task: calls.append(task["version"]) or True
+        )
+        self.assertTrue(
+            manager.enqueue({"module": "collector_app", "version": "9.0.0"})
+        )
+        self.assertTrue(
+            manager.enqueue({"module": "collector_app", "version": "9.0.1"})
+        )
+        self.assertEqual(calls, ["9.0.0"])
+        self.assertFalse(
+            manager.enqueue({"module": "collector_app", "version": "4.1.0"})
+        )
+        self.assertEqual(calls, ["9.0.0"])
 
     def test_target_path_allowlist(self):
         self.assertTrue(safe_target_path("/usr/collector_app.py"))
@@ -125,53 +143,6 @@ class OtaTests(unittest.TestCase):
         self.assertFalse(safe_target_path("/usr/data/signs.queue"))
         self.assertFalse(safe_target_path("/usr/.updater/collector_app.py"))
         self.assertFalse(safe_target_path("/usr/../etc/passwd"))
-
-    def test_migration_rollout_packages_use_low_occupancy_gate(self):
-        manager = self.make_manager()
-
-        def task(files):
-            return {
-                "extData": {
-                    "_package_udi": json.dumps({"files": files})
-                }
-            }
-
-        self.assertTrue(
-            manager._is_migration_package(
-                task(
-                    {
-                        "collector_config.py.bin": "/usr/collector_config.py",
-                        "collector_migration.py.bin": "/usr/collector_migration.py",
-                    }
-                )
-            )
-        )
-        self.assertTrue(
-            manager._is_migration_package(
-                task(
-                    {
-                        "collector_config.py.bin": "/usr/collector_config.py",
-                        "collector_migration.py.bin": "/usr/collector_migration.py",
-                        "collector_queue.py.bin": "/usr/collector_queue.py",
-                    }
-                )
-            )
-        )
-        self.assertTrue(
-            manager._is_migration_package(
-                task(
-                    {
-                        "collector_config.py.bin": "/usr/collector_config.py",
-                        "device_migration.json.bin": "/usr/device_migration.json",
-                    }
-                )
-            )
-        )
-        self.assertFalse(
-            manager._is_migration_package(
-                task({"collector_app.py.bin": "/usr/collector_app.py"})
-            )
-        )
 
     def test_ec600m_url_normalization_and_host_check(self):
         source = "https://bucket.oss-cn-shanghai.aliyuncs.com/app.bin?x=1"
@@ -537,7 +508,7 @@ class OtaTests(unittest.TestCase):
             self.assertEqual(calls["flag"], 0)
             self.assertTrue(storage.restored)
 
-    def test_uart_activity_during_download_aborts_before_update_flag(self):
+    def test_uart_activity_marker_does_not_block_exclusive_ota(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             updater_dir = str(root / "updater")
@@ -591,11 +562,10 @@ class OtaTests(unittest.TestCase):
                 patch.dict(sys.modules, {"app_fota": app_fota}),
                 patch.object(ota_module, "sleep_ms", lambda _value: None),
             ):
-                with self.assertRaisesRegex(OSError, "UART activity resumed"):
-                    manager._process_multi({}, "4.0.4")
+                manager._process_multi({}, "4.0.4")
             self.assertEqual(calls["prepare"], 1)
-            self.assertGreaterEqual(calls["restore"], 1)
-            self.assertEqual(calls["flag"], 0)
+            self.assertEqual(calls["restore"], 0)
+            self.assertEqual(calls["flag"], 1)
 
     def test_multi_file_verification_supports_private_staging_layouts(self):
         with tempfile.TemporaryDirectory() as directory:

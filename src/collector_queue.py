@@ -385,6 +385,27 @@ class RawFrameQueue:
         finally:
             self.lock.release()
 
+    def _discard_all_locked(self):
+        dropped = self.count
+        for offset in range(self.count):
+            index = (self.head + offset) % self.capacity
+            self.frames[index] = None
+            self.sequences[index] = 0
+            self.timestamps[index] = 0
+            self.states[index] = self.QUEUED
+        self.head = 0
+        self.tail = 0
+        self.count = 0
+        return dropped
+
+    def discard_all(self):
+        """Forget every queued/in-flight RAM frame for OTA exclusive mode."""
+        self.lock.acquire()
+        try:
+            return self._discard_all_locked()
+        finally:
+            self.lock.release()
+
     def ack(self, sequence):
         self.lock.acquire()
         try:
@@ -515,6 +536,28 @@ class FlashJournal:
 
     def depth(self):
         return self.count
+
+    def _discard_all_locked(self):
+        dropped = self.count
+        # Retain last_seq so a stale physical slot can never be interpreted as
+        # a newly appended record by the power-loss reconciliation scan.
+        self.head = self.tail
+        self.count = 0
+        self.acked = {}
+        self.peek_failed = False
+        try:
+            self._save_meta()
+        except Exception:
+            self.io_errors += 1
+        return dropped
+
+    def discard_all(self):
+        """Atomically make all durable SignsData records unreachable."""
+        self.lock.acquire()
+        try:
+            return self._discard_all_locked()
+        finally:
+            self.lock.release()
 
     def _metadata_crc(self, data):
         text = "{},{},{},{},{},{}".format(
@@ -857,135 +900,67 @@ class DeliveryStore:
         self.rejected = 0
         self.spilled = 0
         self.last_accepted_seq = journal.last_seq if journal else -1
-        self.send_ceiling = None
-        self.direct_persist = False
-        # Serializes producer routing, watermark changes, and publisher record
-        # selection.  It makes the cutover sequence an exact ownership border:
-        # no record newer than the border can escape through the old identity.
+        self.accepting = True
+        self.discarded = 0
+        # Serializes producer routing, OTA discard, and publisher selection.
         self.routing_lock = new_lock()
-        self.rate_buckets = {}
-        self.rate_first_ms = None
-
-    def _record_rate(self):
-        now = ticks_ms()
-        bucket = now // 10000
-        self.rate_buckets[bucket] = self.rate_buckets.get(bucket, 0) + 1
-        for old in list(self.rate_buckets.keys()):
-            if old < bucket - 30:
-                del self.rate_buckets[old]
-        if self.rate_first_ms is None:
-            self.rate_first_ms = now
 
     def accept(self, frame, timestamp_ms):
         self.routing_lock.acquire()
         try:
+            if not self.accepting:
+                # OTA deliberately discards incoming data. Treat that as an
+                # intentional sink, not a queue overflow/UART storage error.
+                self.discarded += 1
+                return True
             sequence = self.sequence.next()
-            stored = False
-            if self.direct_persist and self.journal and self.journal.enabled():
-                stored = self.journal.append_batch(
-                    [{"seq": sequence, "timestamp_ms": timestamp_ms, "frame": frame}]
-                )
-            else:
-                stored = self.ram.push(sequence, timestamp_ms, frame)
+            stored = self.ram.push(sequence, timestamp_ms, frame)
             if not stored:
                 self.rejected += 1
                 return False
             self.accepted += 1
             self.last_accepted_seq = sequence
-            self._record_rate()
             return True
         finally:
             self.routing_lock.release()
 
-    def highest_accepted_sequence(self):
-        return self.last_accepted_seq
-
-    def set_send_ceiling(self, sequence):
+    def stop_accepting(self):
         self.routing_lock.acquire()
         try:
-            self.send_ceiling = int(sequence)
+            self.accepting = False
         finally:
             self.routing_lock.release()
 
-    def clear_send_ceiling(self):
+    def resume_accepting(self):
         self.routing_lock.acquire()
         try:
-            self.send_ceiling = None
+            self.accepting = True
         finally:
             self.routing_lock.release()
 
-    def arm_persistent_watermark(self):
-        """Atomically hold future records and route them straight to Flash."""
+    def discard_all(self):
+        """Stop producers and drop RAM/Flash data under consistent locks."""
         self.routing_lock.acquire()
         try:
-            if not self.journal or not self.journal.enabled():
-                return None
-            cutover = int(self.last_accepted_seq)
-            self.send_ceiling = cutover
-            self.direct_persist = True
-            return cutover
+            self.accepting = False
+            self.ram.lock.acquire()
+            try:
+                journal = self.journal
+                if journal:
+                    journal.lock.acquire()
+                try:
+                    dropped = self.ram._discard_all_locked()
+                    if journal:
+                        dropped += journal._discard_all_locked()
+                finally:
+                    if journal:
+                        journal.lock.release()
+            finally:
+                self.ram.lock.release()
+            self.discarded += dropped
+            return dropped
         finally:
             self.routing_lock.release()
-
-    def resume_persistent_watermark(self, sequence):
-        """Restore a committed border before the target cloud worker starts."""
-        self.routing_lock.acquire()
-        try:
-            if not self.journal or not self.journal.enabled():
-                self.send_ceiling = int(sequence)
-                return False
-            self.send_ceiling = int(sequence)
-            self.direct_persist = True
-            return True
-        finally:
-            self.routing_lock.release()
-
-    def release_persistent_watermark(self):
-        self.routing_lock.acquire()
-        try:
-            self.send_ceiling = None
-            self.direct_persist = False
-        finally:
-            self.routing_lock.release()
-
-    def arm_ota_persistence_if_empty(self):
-        """Make the final OTA reboot gap durable without stopping UART."""
-        self.routing_lock.acquire()
-        try:
-            if (
-                not self.journal
-                or not self.journal.enabled()
-                or self.ram.depth()
-                or self.journal.depth()
-            ):
-                return False
-            self.direct_persist = True
-            return True
-        finally:
-            self.routing_lock.release()
-
-    def enable_direct_persistence(self):
-        self.routing_lock.acquire()
-        try:
-            if not self.journal or not self.journal.enabled():
-                return False
-            self.direct_persist = True
-            return True
-        finally:
-            self.routing_lock.release()
-
-    def disable_direct_persistence(self):
-        self.routing_lock.acquire()
-        try:
-            self.direct_persist = False
-        finally:
-            self.routing_lock.release()
-
-    def pending_through(self, sequence):
-        if self.journal and self.journal.peek_failed:
-            return True
-        oldest = self.oldest_sequence()
-        return oldest is not None and oldest <= int(sequence)
 
     def oldest_sequence(self):
         ram_record = self.ram.oldest()
@@ -1016,39 +991,6 @@ class DeliveryStore:
         if not self.journal:
             return 0
         return max(0, self.journal.capacity - self.journal.depth())
-
-    def migration_flash_headroom(self, abort_percent=75):
-        if not self.journal or not self.journal.enabled():
-            return 0
-        limit = (self.journal.capacity * int(abort_percent)) // 100
-        return max(0, limit - self.journal.depth())
-
-    def migration_occupancy_percent(self):
-        total = self.occupancy_percent()
-        if not self.journal or not self.journal.capacity:
-            return 100
-        durable = (self.journal.depth() * 100) // self.journal.capacity
-        return max(total, durable)
-
-    def acceptance_rates(self):
-        """Return recent one/five-minute rates without retaining frame data."""
-        if self.rate_first_ms is None:
-            return 0.0, 0.0
-        now = ticks_ms()
-        bucket = now // 10000
-        one_count = 0
-        five_count = 0
-        for key, count in self.rate_buckets.items():
-            age = bucket - key
-            if 0 <= age <= 30:
-                five_count += count
-                if age <= 6:
-                    one_count += count
-        observed = max(1.0, float(ticks_diff(now, self.rate_first_ms)) / 1000.0)
-        return (
-            float(one_count) / min(60.0, observed),
-            float(five_count) / min(300.0, observed),
-        )
 
     def detach_empty_journal(self):
         """Release an empty preallocated spool so a full app OTA can fit."""
@@ -1133,12 +1075,6 @@ class DeliveryStore:
                 )
             else:
                 record = ram_record or flash_record
-            if (
-                record
-                and self.send_ceiling is not None
-                and record["seq"] > self.send_ceiling
-            ):
-                return None
             if record and record["source"] == "ram":
                 if not self.ram.mark_inflight(record["seq"]):
                     return None
@@ -1185,6 +1121,7 @@ class DeliveryStore:
             "acked": self.acked,
             "rejected": self.rejected,
             "spilled": self.spilled,
+            "discarded": self.discarded,
             "ram_depth": self.ram.depth(),
             "ram_capacity": self.ram.capacity,
             "flash_depth": self.flash_depth(),
@@ -1192,7 +1129,6 @@ class DeliveryStore:
             "flash_corrupt": self.journal.corrupt_records if self.journal else 0,
             "flash_io_errors": self.journal.io_errors if self.journal else 0,
             "oldest_timestamp_ms": self.oldest_timestamp_ms(),
-            "send_ceiling": self.send_ceiling,
             "last_accepted_seq": self.last_accepted_seq,
             "occupancy_percent": self.occupancy_percent(),
         }

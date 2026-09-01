@@ -321,6 +321,16 @@ class FrameStream:
                 info_callback(frame, captured_ms)
         return processed
 
+    def discard_pending(self):
+        """Atomically drop all bytes already buffered for parsing."""
+        self.lock.acquire()
+        try:
+            pending = self.ring.count
+            self.ring.discard(pending)
+            return pending
+        finally:
+            self.lock.release()
+
     def stats(self):
         self.lock.acquire()
         try:

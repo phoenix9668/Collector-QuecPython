@@ -44,6 +44,8 @@ class FakeLogger:
     def __init__(self):
         self.info_calls = []
         self.warn_calls = []
+        self.error_calls = []
+        self.runtime_calls = []
 
     def info(self, *args, **kwargs):
         self.info_calls.append((args, kwargs))
@@ -51,6 +53,14 @@ class FakeLogger:
 
     def warn(self, *args, **kwargs):
         self.warn_calls.append((args, kwargs))
+        return True
+
+    def error(self, *args, **kwargs):
+        self.error_calls.append((args, kwargs))
+        return True
+
+    def runtime(self, *args, **kwargs):
+        self.runtime_calls.append((args, kwargs))
         return True
 
 
@@ -93,27 +103,140 @@ class AppTests(unittest.TestCase):
         self.assertIn("frame_type=B0", extra)
         self.assertLess(len(extra), 400)
 
-    def test_bridge_low_occupancy_gate_supports_legacy_delivery_store(self):
+    def test_ota_ready_no_longer_depends_on_queue_occupancy(self):
         app = CollectorApplication.__new__(CollectorApplication)
         app.cloud = types.SimpleNamespace(connected=True)
-        app.quiet_gate = types.SimpleNamespace(quiet_since_ms=None)
         app.ram_queue = types.SimpleNamespace(capacity=60, depth=lambda: 10)
         app.journal = types.SimpleNamespace(capacity=20)
         app.delivery = types.SimpleNamespace(flash_depth=lambda: 10)
         self.assertTrue(app._ota_ready(True))
         app.ram_queue.depth = lambda: 11
-        self.assertFalse(app._ota_ready(True))
+        self.assertTrue(app._ota_ready(False))
 
-    def test_bridge_finalizer_uses_double_check_without_new_queue_api(self):
+    def test_ota_exclusive_mode_stops_business_and_discards_data(self):
+        calls = []
         app = CollectorApplication.__new__(CollectorApplication)
-        app.ram_queue = types.SimpleNamespace(depth=lambda: 0)
-        app.delivery = types.SimpleNamespace(
-            accepted=7,
-            flash_depth=lambda: 0,
+        app.ota_exclusive = False
+        app._ota_legacy_cloud_methods = None
+        app._ota_legacy_accept = None
+        app.migration = types.SimpleNamespace(stop=False)
+        app.uart = types.SimpleNamespace(
+            pause_for_ota=lambda: calls.append("uart_pause") or True,
+            resume_after_ota=lambda: calls.append("uart_resume") or True,
         )
-        app.cloud = types.SimpleNamespace(stats=lambda: {"inflight": 0})
-        with patch.object(app_module.utime, "sleep_ms", lambda _value: None):
-            self.assertTrue(app._prepare_migration_reboot())
+        app.sensors = types.SimpleNamespace(
+            pause_for_ota=lambda: calls.append("sensor_pause") or True,
+            resume_after_ota=lambda: calls.append("sensor_resume") or True,
+        )
+        app.cloud = types.SimpleNamespace(
+            enter_ota_mode=lambda: calls.append("cloud_pause") or 2,
+            exit_ota_mode=lambda: calls.append("cloud_resume") or True,
+        )
+        app.delivery = types.SimpleNamespace(
+            discard_all=lambda: calls.append("discard") or 7,
+            resume_accepting=lambda: calls.append("accept_resume") or True,
+        )
+        app.logger = FakeLogger()
+        app.logger.paused = False
+        self.assertTrue(app._enter_ota_mode({"version": "4.1.1"}))
+        self.assertTrue(app.ota_exclusive)
+        self.assertTrue(app.migration.stop)
+        self.assertTrue(app.logger.paused)
+        self.assertEqual(
+            calls, ["cloud_pause", "discard", "uart_pause", "sensor_pause"]
+        )
+        self.assertTrue(app._exit_ota_mode())
+        self.assertFalse(app.ota_exclusive)
+        self.assertFalse(app.migration.stop)
+        self.assertFalse(app.logger.paused)
+        self.assertEqual(
+            calls[-4:],
+            ["accept_resume", "cloud_resume", "uart_resume", "sensor_resume"],
+        )
+
+    def test_migration_mode_keeps_logs_and_manager_active(self):
+        calls = []
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.ota_exclusive = False
+        app._ota_legacy_cloud_methods = None
+        app._ota_legacy_accept = None
+        app.migration = types.SimpleNamespace(stop=False)
+        app.uart = types.SimpleNamespace(
+            pause_for_ota=lambda: calls.append("uart_pause") or True,
+        )
+        app.sensors = types.SimpleNamespace(
+            pause_for_ota=lambda: calls.append("sensor_pause") or True,
+        )
+        app.cloud = types.SimpleNamespace(
+            enter_ota_mode=lambda: calls.append("cloud_pause") or 0,
+        )
+        app.delivery = types.SimpleNamespace(
+            discard_all=lambda: calls.append("discard") or 0,
+        )
+        app.logger = FakeLogger()
+        app.logger.paused = False
+        self.assertTrue(
+            app._pause_business(
+                "migration", stop_migration=False, pause_logs=False
+            )
+        )
+        self.assertFalse(app.migration.stop)
+        self.assertFalse(app.logger.paused)
+        self.assertEqual(
+            calls, ["cloud_pause", "discard", "uart_pause", "sensor_pause"]
+        )
+
+    def test_pending_ota_reserve_hold_is_info_not_error(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = {"version": "4.1.1"}
+        app.logger = FakeLogger()
+        self.assertTrue(app._report_reserve_unavailable(startup=True))
+        self.assertEqual(len(app.logger.info_calls), 1)
+        self.assertEqual(
+            app.logger.info_calls[0][0][1], "OTA_RESERVE_DEFERRED"
+        )
+        self.assertEqual(app.logger.error_calls, [])
+
+    def test_non_ota_reserve_failure_remains_an_error(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = None
+        app.logger = FakeLogger()
+        self.assertTrue(app._report_reserve_unavailable())
+        self.assertEqual(app.logger.info_calls, [])
+        self.assertEqual(len(app.logger.error_calls), 1)
+        self.assertEqual(app.logger.error_calls[0][0][1], "OTA_RESERVE")
+
+    def test_health_confirmation_restores_storage_before_clearing_hold(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = {"version": "4.1.1"}
+        app.logger = FakeLogger()
+        restored = []
+        app._restore_runtime_storage = lambda: restored.append(True) or True
+        with (
+            patch.object(app_module.utime, "sleep", lambda _value: None),
+            patch.object(app_module.OtaBootGuard, "mark_healthy", return_value=True),
+        ):
+            app._health_worker()
+        self.assertEqual(restored, [True])
+        self.assertIsNone(app.pending_ota)
+        self.assertEqual(app.logger.error_calls, [])
+        self.assertEqual(len(app.logger.runtime_calls), 1)
+
+    def test_health_confirmation_reports_real_restore_failure(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.pending_ota = {"version": "4.1.1"}
+        app.logger = FakeLogger()
+        app._restore_runtime_storage = lambda: False
+        with (
+            patch.object(app_module.utime, "sleep", lambda _value: None),
+            patch.object(app_module.OtaBootGuard, "mark_healthy", return_value=True),
+        ):
+            app._health_worker()
+        self.assertIsNone(app.pending_ota)
+        self.assertEqual(len(app.logger.error_calls), 1)
+        self.assertEqual(
+            app.logger.error_calls[0][0][1], "OTA_RESERVE_RESTORE"
+        )
 
 
 if __name__ == "__main__":

@@ -108,6 +108,17 @@ class SensorTests(unittest.TestCase):
             },
         )
 
+    def test_ota_pause_suppresses_sensor_collection_and_publish(self):
+        cloud = FakeCloud()
+        service = SensorService(None, cloud, FakeLogger())
+        service.aht10 = types.SimpleNamespace(
+            measure=lambda: self.fail("sensor must remain paused")
+        )
+        self.assertTrue(service.pause_for_ota())
+        self.assertFalse(service._publish_cycle(include_sim=True))
+        self.assertEqual(cloud.published, [])
+        self.assertTrue(service.resume_after_ota())
+
 
 if __name__ == "__main__":
     unittest.main()

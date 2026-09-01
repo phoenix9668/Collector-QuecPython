@@ -40,57 +40,6 @@ class FakeSequence:
 class FakeDelivery:
     def __init__(self):
         self.sequence = FakeSequence()
-        self.ceiling = None
-        self.cleared = False
-        self.percent = 0
-        self.direct_persist = False
-        self.one_rate = 0.0
-        self.five_rate = 0.0
-        self.available = 512
-        self.headroom = 512
-
-    def occupancy_percent(self):
-        return self.percent
-
-    def acceptance_rates(self):
-        return self.one_rate, self.five_rate
-
-    def available_frames(self):
-        return self.available
-
-    def migration_flash_headroom(self, _abort_percent=75):
-        return self.headroom
-
-    def migration_occupancy_percent(self):
-        return self.percent
-
-    def highest_accepted_sequence(self):
-        return 42
-
-    def set_send_ceiling(self, value):
-        self.ceiling = value
-
-    def arm_persistent_watermark(self):
-        self.ceiling = self.highest_accepted_sequence()
-        self.direct_persist = True
-        return self.ceiling
-
-    def resume_persistent_watermark(self, value):
-        self.ceiling = value
-        self.direct_persist = True
-        return True
-
-    def release_persistent_watermark(self):
-        self.ceiling = None
-        self.direct_persist = False
-        self.cleared = True
-
-    def clear_send_ceiling(self):
-        self.ceiling = None
-        self.cleared = True
-
-    def pending_through(self, _value):
-        return False
 
 
 class FakeCloud:
@@ -170,6 +119,32 @@ class MigrationTests(unittest.TestCase):
             Path(newest).write_text("broken", encoding="utf-8")
             self.assertEqual(migration.load_migration_state(paths)["stage"], "one")
 
+    def test_migration_id_validator_uses_quecpython_compatible_ascii_rules(self):
+        for value in ("1", "migration-001", "DEVICE_01.release"):
+            self.assertEqual(migration._valid_migration_id(value), value)
+        for value in ("", "has space", "path/name", "迁移-001"):
+            self.assertEqual(migration._valid_migration_id(value), "")
+        source = (ROOT / "src" / "collector_migration.py").read_text(encoding="utf-8")
+        self.assertNotIn(".isalnum(", source)
+
+    def test_pending_command_or_state_requires_startup_exclusive_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.path_patches(root):
+                manager = migration.MigrationManager(
+                    source_config(), FakeDelivery(), FakeCloud(), FakeLogger(), lambda: None
+                )
+                self.assertFalse(manager.has_pending())
+                (root / "device_migration.json").write_text(
+                    json.dumps(command()), encoding="utf-8"
+                )
+                self.assertTrue(manager.has_pending())
+                (root / "device_migration.json").unlink()
+                manager.state = migration.save_migration_state(
+                    {"migrationId": "migration-001", "stage": "preflight"}
+                )
+                self.assertTrue(manager.has_pending())
+
     def test_validation_requires_exact_source_and_product_secret(self):
         normalized = migration.normalize_migration(command(), source_config())
         self.assertEqual(normalized["target"]["productKey"], "newPk")
@@ -191,27 +166,12 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             migration.normalize_migration(invalid, source_config())
 
-    def test_capacity_estimate_requires_180_seconds_at_150_percent(self):
-        delivery = FakeDelivery()
-        delivery.one_rate = 1.0
-        delivery.headroom = 269
-        manager = migration.MigrationManager(
-            source_config(), delivery, FakeCloud(), FakeLogger(), lambda: None
-        )
-        ready, detail = manager._capacity_ready()
-        self.assertFalse(ready)
-        self.assertIn("269/270", detail)
-        delivery.headroom = 270
-        ready, detail = manager._capacity_ready()
-        self.assertTrue(ready)
-        self.assertIn("required=270", detail)
-
     def test_boot_recovery_chooses_source_before_commit_and_target_after_commit(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             state = {
                 "migrationId": "migration-001",
-                "stage": "armed",
+                "stage": "prepared",
                 "sourceConfig": source_config().as_dict(),
                 "sourceSecret": None,
                 "targetConfig": command()["target"],
@@ -231,7 +191,7 @@ class MigrationTests(unittest.TestCase):
                 migration.recover_identity_before_load()
                 active = json.loads((root / "device.json").read_text(encoding="utf-8"))
                 self.assertEqual(active["productKey"], "newPk")
-    def test_preflight_arms_watermark_and_atomically_commits_target(self):
+    def test_preflight_commits_target_without_queue_or_watermark(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             delivery = FakeDelivery()
@@ -249,22 +209,23 @@ class MigrationTests(unittest.TestCase):
             secret = json.loads(
                 (root / "device_secret.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(delivery.ceiling, 42)
             self.assertEqual(active["productKey"], "newPk")
             self.assertEqual(secret["deviceSecret"], "new-device-secret")
             self.assertTrue(cloud.disconnected)
             self.assertEqual(rebooted, [True])
 
-    def test_target_confirmation_releases_held_records_only_after_event_ack(self):
+    def test_target_confirmation_reboots_only_after_event_ack(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             delivery = FakeDelivery()
             cloud = FakeCloud()
             logger = FakeLogger()
+            rebooted = []
             state = {
                 "migrationId": "migration-001",
                 "stage": "committed",
-                "cutoverSeq": 42,
+                "confirmSeconds": 0,
+                "rollbackSeconds": 180,
                 "sourceConfig": source_config().as_dict(),
                 "sourceSecret": None,
                 "targetConfig": command()["target"],
@@ -275,33 +236,33 @@ class MigrationTests(unittest.TestCase):
                 },
             }
             with self.path_patches(root), patch.object(
-                migration, "MIGRATION_CONFIRM_SECONDS", 0
+                migration, "sleep_ms", lambda _value: None
             ):
                 manager = migration.MigrationManager(
                     DeviceConfig(command()["target"]),
                     delivery,
                     cloud,
                     logger,
-                    lambda: None,
+                    lambda: rebooted.append(True),
                 )
                 manager.state = migration.save_migration_state(state)
                 manager._confirm_target()
             done = json.loads((root / "done.json").read_text(encoding="utf-8"))
             self.assertEqual(done["status"], "success")
-            self.assertTrue(delivery.cleared)
+            self.assertEqual(rebooted, [True])
             self.assertFalse((root / "device_migration.json").exists())
 
-    def test_confirmation_capacity_threshold_restores_old_identity(self):
+    def test_confirmation_does_not_depend_on_queue_capacity(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             delivery = FakeDelivery()
-            delivery.percent = 75
             cloud = FakeCloud()
             rebooted = []
             state = {
                 "migrationId": "migration-001",
                 "stage": "committed",
-                "cutoverSeq": 42,
+                "confirmSeconds": 0,
+                "rollbackSeconds": 180,
                 "sourceConfig": source_config().as_dict(),
                 "sourceSecret": None,
                 "targetConfig": command()["target"],
@@ -311,7 +272,9 @@ class MigrationTests(unittest.TestCase):
                     "deviceSecret": "new-device-secret",
                 },
             }
-            with self.path_patches(root):
+            with self.path_patches(root), patch.object(
+                migration, "sleep_ms", lambda _value: None
+            ):
                 manager = migration.MigrationManager(
                     DeviceConfig(command()["target"]),
                     delivery,
@@ -321,17 +284,11 @@ class MigrationTests(unittest.TestCase):
                 )
                 manager.state = migration.save_migration_state(state)
                 manager._confirm_target()
-            active = json.loads((root / "device.json").read_text(encoding="utf-8"))
             done = json.loads((root / "done.json").read_text(encoding="utf-8"))
-            self.assertEqual(active["productKey"], "oldPk")
-            self.assertEqual(done["status"], "rolled_back")
-            # Keep the durable border until reboot so late frames cannot fall
-            # back into volatile RAM during the identity switch.
-            self.assertEqual(delivery.ceiling, 42)
-            self.assertTrue(delivery.direct_persist)
+            self.assertEqual(done["status"], "success")
             self.assertEqual(rebooted, [True])
 
-    def test_target_event_rejection_rolls_back_without_releasing_border(self):
+    def test_target_event_rejection_rolls_back(self):
         class RejectCloud(FakeCloud):
             def publish_event_tracked(self, _identifier, _params):
                 self.result = 400
@@ -345,7 +302,8 @@ class MigrationTests(unittest.TestCase):
             state = {
                 "migrationId": "migration-001",
                 "stage": "committed",
-                "cutoverSeq": 42,
+                "confirmSeconds": 120,
+                "rollbackSeconds": 180,
                 "sourceConfig": source_config().as_dict(),
                 "sourceSecret": None,
                 "targetConfig": command()["target"],
@@ -369,7 +327,6 @@ class MigrationTests(unittest.TestCase):
                 manager._confirm_target()
             active = json.loads((root / "device.json").read_text(encoding="utf-8"))
             self.assertEqual(active["productKey"], "oldPk")
-            self.assertEqual(delivery.ceiling, 42)
             self.assertEqual(rebooted, [True])
 
 

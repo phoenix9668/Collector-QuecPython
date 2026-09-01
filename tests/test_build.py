@@ -141,7 +141,7 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn("legacy", manifest)
             self.assertFalse((output / "main.py.bin").exists())
 
-    def test_private_migration_package_contains_only_version_and_command(self):
+    def test_private_migration_package_carries_exclusive_migration_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = root / "migration.json"
@@ -177,12 +177,61 @@ class BuildTests(unittest.TestCase):
                 )
             self.assertEqual(
                 [item["fileName"] for item in manifest["files"]],
-                ["collector_config.py.bin", "device_migration.json.bin"],
+                [
+                    "collector_app.py.bin",
+                    "collector_config.py.bin",
+                    "collector_migration.py.bin",
+                    "collector_ota.py.bin",
+                    "device_migration.json.bin",
+                ],
             )
             self.assertTrue(manifest["containsSecrets"])
             self.assertNotIn(
                 "private-product-secret",
                 (output / "aliyun_custom_info.txt").read_text(encoding="utf-8"),
+            )
+
+    def test_private_migration_build_allows_ignored_private_base(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "migration.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "migrationId": "device-001-retry-01",
+                        "source": {"productKey": "oldPk", "deviceName": "oldDn"},
+                        "target": {
+                            "productKey": "newPk",
+                            "deviceName": "newDn",
+                            "mqttServer": "new.iot-as-mqtt.cn-shanghai.aliyuncs.com",
+                            "mqttPort": 1883,
+                            "deviceSecret": "",
+                            "productSecret": "private-product-secret",
+                            "otaAllowedHosts": [".aliyuncs.com"],
+                        },
+                        "confirmSeconds": 120,
+                        "rollbackSeconds": 180,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            private_root = root / "private_dist"
+            output = private_root / "device-001-retry"
+            with patch.object(build_module, "PRIVATE_OUTPUT_ROOT", private_root):
+                manifest = build(
+                    output,
+                    "9.9.8",
+                    target_version="9.9.9",
+                    migration_config=config,
+                )
+            self.assertEqual(manifest["baseVersion"], "9.9.8")
+            self.assertTrue(manifest["changedFilesOnly"])
+            self.assertNotIn("legacy", manifest)
+            self.assertFalse((output / "main.py.bin").exists())
+            self.assertGreaterEqual(
+                manifest["backupAlignedBytes"] + manifest["copyModeExtraBytes"],
+                manifest["fileAlignedBytes"],
             )
 
 

@@ -272,6 +272,7 @@ class CloudClient:
         self.connected = False
         self.connecting = False
         self.stop = False
+        self.ota_exclusive = False
         self.connection_generation = 0
         self.publish_lock = _thread.allocate_lock() if _thread else None
         self.state_lock = _thread.allocate_lock() if _thread else None
@@ -607,6 +608,8 @@ class CloudClient:
                 self.publish_lock.release()
 
     def publish_properties(self, values, qos=0):
+        if self.ota_exclusive:
+            return False
         params = {}
         for key, value in values.items():
             if isinstance(value, dict):
@@ -645,6 +648,8 @@ class CloudClient:
 
     def defer_properties(self, values):
         """Queue UART-derived auxiliary properties for the cloud worker."""
+        if self.ota_exclusive:
+            return False
         if not isinstance(values, dict) or not values:
             return False
         if self.deferred_lock:
@@ -926,6 +931,8 @@ class CloudClient:
             sleep_ms(20)
 
     def _delivery_cycle(self):
+        if self.ota_exclusive:
+            return
         if not self.connected:
             sleep_ms(100)
             return
@@ -963,6 +970,8 @@ class CloudClient:
             self._flush_deferred_one()
 
     def _handle_property_reply(self, message):
+        if self.ota_exclusive:
+            return
         message_id = str(message.get("id", ""))
         property_reply = False
         if self.state_lock:
@@ -1179,4 +1188,32 @@ class CloudClient:
             "uart_sample_log": 1 if self.uart_sample_log_enabled else 0,
             "deferred": deferred,
             "deferred_dropped": deferred_dropped,
+            "ota_exclusive": 1 if self.ota_exclusive else 0,
         }
+
+    def enter_ota_mode(self):
+        """Pause business traffic while retaining MQTT for OTA control."""
+        self.ota_exclusive = True
+        if self.state_lock:
+            self.state_lock.acquire()
+        try:
+            dropped = len(self.inflight)
+            self.inflight = {}
+            self.property_reply_ids = []
+        finally:
+            if self.state_lock:
+                self.state_lock.release()
+        if self.deferred_lock:
+            self.deferred_lock.acquire()
+        try:
+            dropped += len(self.deferred_properties)
+            self.deferred_properties = []
+        finally:
+            if self.deferred_lock:
+                self.deferred_lock.release()
+        return dropped
+
+    def exit_ota_mode(self):
+        """Resume business traffic after an OTA attempt fails safely."""
+        self.ota_exclusive = False
+        return True
