@@ -267,6 +267,21 @@ class AppTests(unittest.TestCase):
             app.logger.error_calls[0][0][1], "OTA_RESERVE_RESTORE"
         )
 
+    def test_runtime_storage_accepts_ram_only_after_reserve_restore(self):
+        app = CollectorApplication.__new__(CollectorApplication)
+        app.storage = types.SimpleNamespace(
+            restore_reserve=lambda: True,
+            spool_budget=lambda: 0,
+        )
+        app.delivery = types.SimpleNamespace(journal=None)
+        app.journal = None
+        app.logger = FakeLogger()
+        self.assertTrue(app._restore_runtime_storage())
+        self.assertIsNone(app.journal)
+        self.assertEqual(app.logger.error_calls, [])
+        self.assertEqual(app.logger.warn_calls, [])
+        self.assertEqual(app.logger.info_calls[0][0][1], "SPOOL_DISABLED")
+
     def test_health_confirmation_defers_storage_during_migration(self):
         app = CollectorApplication.__new__(CollectorApplication)
         app.pending_ota = {"version": "4.1.2"}

@@ -104,9 +104,9 @@ class CollectorApplication:
                     "Flash SignsData spool is deferred until maintenance completes",
                 )
             else:
-                self.logger.warn(
+                self.logger.info(
                     "storage", "SPOOL_DISABLED",
-                    "Flash SignsData spool is unavailable; only the RAM queue is active"
+                    "Flash SignsData spool is unavailable after preserving OTA reserve; only the RAM queue is active"
                 )
 
         initial_sequence = 0
@@ -373,7 +373,7 @@ class CollectorApplication:
         return True
 
     def _restore_runtime_storage(self):
-        """Restore the reserve and Flash spool after OTA failure/health confirm."""
+        """Restore the mandatory reserve and an optional dynamic Flash spool."""
         if not self.storage.restore_reserve():
             return False
         if self.delivery.journal is not None:
@@ -381,7 +381,15 @@ class CollectorApplication:
             return True
         spool_bytes = self.storage.spool_budget()
         if spool_bytes <= 0:
-            return False
+            # The 576 KiB partition may legitimately have no room left for a
+            # spool after the full 256 KiB OTA reserve is restored. RAM-only
+            # delivery is a supported degraded capacity, not an OTA failure.
+            self.journal = None
+            self.logger.info(
+                "storage", "SPOOL_DISABLED",
+                "OTA reserve restored; no dynamic Flash spool space is available",
+            )
+            return True
         journal = FlashJournal(
             FLASH_SPOOL_FILE,
             FLASH_SPOOL_META_0,
@@ -389,7 +397,11 @@ class CollectorApplication:
             spool_bytes,
         )
         if not journal.enabled() or not self.delivery.attach_journal(journal):
-            return False
+            self.logger.warn(
+                "storage", "SPOOL_RESTORE",
+                "OTA reserve restored but Flash spool initialization failed; RAM queue remains active",
+            )
+            return True
         self.journal = journal
         return True
 
