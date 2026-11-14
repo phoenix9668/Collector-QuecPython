@@ -42,11 +42,14 @@ from collector_config import (
     PROJECT_VERSION,
     SIGNS_MQTT_QOS,
     SIGNS_PUBLISH_INTERVAL_MS,
-    clear_cached_device_secret,
+    CredentialStoreError,
+    check_credential_capacity,
     load_cached_device_secret,
     load_uart_sample_log,
+    redact_credential_values,
     save_cached_device_secret,
     save_uart_sample_log,
+    valid_device_secret,
 )
 from collector_protocol import decode_signs_frame
 
@@ -103,11 +106,13 @@ def extract_device_secret(payload):
         data = json.loads(payload)
     except Exception:
         return ""
+    if not isinstance(data, dict):
+        return ""
     secret = data.get("deviceSecret", "")
     nested = data.get("data", {})
     if not secret and isinstance(nested, dict):
         secret = nested.get("deviceSecret", "")
-    return str(secret)
+    return secret if valid_device_secret(secret) else ""
 
 
 def _timestamp_value():
@@ -302,7 +307,11 @@ class CloudClient:
         self.last_signs_publish_ms = None
         self.last_connect_ms = 0
         self.connect_failures = 0
-        self.force_dynamic_register = False
+        self.pending_secret = ""
+        self.auth_secret = ""
+        self.auth_password = ""
+        self.auth_source = "unknown"
+        self.connect_stage = "credential_read"
         self.checknet = None
         self.net_state = "unknown"
         self.net_stagecode = 0
@@ -401,36 +410,65 @@ class CloudClient:
         return device_auth(self.config, secret)
 
     def _dynamic_register(self):
-        secret = dynamic_register_secret(self.config)
-        if secret:
-            save_cached_device_secret(self.config, secret)
+        if not self.pending_secret:
+            self.connect_stage = "credential_capacity"
+            check_credential_capacity(self.config)
+            self.connect_stage = "register"
+            self.auth_source = "registration"
+            self.pending_secret = dynamic_register_secret(self.config)
+            if not valid_device_secret(self.pending_secret):
+                self.pending_secret = ""
+                raise CredentialStoreError("registration returned no valid DeviceSecret")
+        self.connect_stage = "credential_write"
+        self.auth_source = "registered"
+        secret = self.pending_secret
+        save_cached_device_secret(self.config, secret)
+        self.pending_secret = ""
         return secret
 
     def _get_device_secret(self):
-        if self.config.device_secret:
-            return self.config.device_secret
-        if not self.force_dynamic_register:
-            cached = load_cached_device_secret(self.config)
-            if cached:
-                return cached
-        secret = self._dynamic_register()
-        if secret:
-            self.force_dynamic_register = False
+        self.connect_stage = "credential_read"
+        self.auth_source = "unknown"
+        if self.pending_secret:
+            return self._dynamic_register()
+        secret = self.config.device_secret
+        self.auth_source = "config" if secret else "cache"
+        if not secret:
+            secret = load_cached_device_secret(self.config)
+        if not secret:
+            return self._dynamic_register()
+        # Import legacy/config credentials and repair redundant copies. An
+        # already stored identity may still connect when the archive is full.
+        try:
+            save_cached_device_secret(self.config, secret)
+        except CredentialStoreError as error:
+            self.logger.warn(
+                "mqtt", "CREDENTIAL_BACKUP", "Credential archive repair deferred: {}".format(
+                    self._connect_error_text(error)),
+                rate_limit_s=60,
+            )
         return secret
+
+    def _connect_error_text(self, error):
+        return redact_credential_values(error, (
+            self.config.product_secret, self.config.device_secret,
+            self.pending_secret, self.auth_secret, self.auth_password))
 
     def _mqtt_error(self, error):
         self.logger.warn(
-            "mqtt", "CLIENT_ERROR", "MQTT client error: {}".format(error), rate_limit_s=10
+            "mqtt", "CLIENT_ERROR", "MQTT client error: {}".format(self._connect_error_text(error)), rate_limit_s=10
         )
         self._mark_disconnected()
 
     def _connect_once(self):
-        MQTTClient = _load_mqtt_client()
-
         secret = self._get_device_secret()
         if not secret:
             raise ValueError("DeviceSecret unavailable")
+        self.auth_secret = secret
+        self.connect_stage = "mqtt_login"
+        MQTTClient = _load_mqtt_client()
         auth = self._device_auth(secret)
+        self.auth_password = auth["password"]
         client = MQTTClient(
             auth["client_id"],
             self.config.mqtt_server,
@@ -449,6 +487,7 @@ class CloudClient:
             pass
         try:
             client.connect(clean_session=False)
+            self.connect_stage = "subscribe"
             subscriptions = (
                 self.topics["property_set"],
                 self.topics["property_post_reply"],
@@ -474,7 +513,7 @@ class CloudClient:
         self.connection_generation += 1
         self.logger.runtime(
             "network", "collector", self.config.device_name, "connect", "device",
-            "Aliyun MQTT connected", value=1
+            "Aliyun MQTT connected", value=1, extra="credential=" + self.auth_source
         )
         self.publish_properties(
             {
@@ -571,25 +610,15 @@ class CloudClient:
                 backoff = 2
             except Exception as error:
                 self.connect_failures += 1
-                if (
-                    self.connect_failures >= 3
-                    and not self.config.device_secret
-                    and self.config.product_secret
-                ):
-                    clear_cached_device_secret()
-                    self.force_dynamic_register = True
-                    self.connect_failures = 0
-                    self.logger.warn(
-                        "mqtt", "AUTH_REFRESH",
-                        "Refreshing dynamically registered DeviceSecret",
-                        rate_limit_s=60,
-                    )
-                self.mqtt_state = "connect_failed"
                 self.logger.error(
-                    "mqtt", "CONNECT", "MQTT connect failed: {}".format(error),
+                    "mqtt", "CONNECT", "Connection failed at {}: {}".format(
+                        self.connect_stage, self._connect_error_text(error)),
+                    extra="credential={},attempt={}".format(
+                        self.auth_source, self.connect_failures),
                     rate_limit_s=10
                 )
                 self._mark_disconnected()
+                self.mqtt_state = "connect_failed"
                 sleep_ms(backoff * 1000)
                 backoff = min(backoff * 2, 300)
             self.connecting = False

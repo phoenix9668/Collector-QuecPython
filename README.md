@@ -1,12 +1,12 @@
 # Collector-QuecPython
 
-国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.4`。
+国内 EC600M Collector 固件，运行于 QuecPython，连接阿里云物联网平台。当前应用版本为 `4.1.5`。
 
 ## 主要能力
 
 - UART2 `115200 8N1` 高吞吐接收，B0体征包固定206字节；回调只搬运字节，解析、Flash持久化和MQTT发布相互隔离。
 - 体征数据采用RAM队列、动态Flash循环队列和阿里云属性上报回复确认，提供有容量边界的至少一次投递。
-- DeviceSecret直接认证，或ProductSecret动态注册并缓存DeviceSecret；仓库不保存生产密钥。
+- DeviceSecret直接认证，或ProductSecret动态注册；按身份永久保留已取得的DeviceSecret，连接失败不删除密钥，使用CRC校验和双份快照恢复；仓库不保存生产密钥。
 - 阿里云应用OTA：多文件 `app_fota` HTTP升级，以及兼容旧平台的MQTT分块单 `main.py` 升级。
 - 针对实机约576 KiB的 `/usr` 分区实际预占256 KiB OTA空间；体征Flash循环队列动态分配、最多96 KiB，且不会挤占OTA预留、安全余量和运行元数据空间。
 - `runtimeLog`、`debugLog`结构化云日志使用独立限速线程和阿里云事件回复确认，本地严重日志双文件合计最多16 KiB。
@@ -27,8 +27,8 @@
 
 ## 首次部署
 
-1. 将 `src/main.py` 和全部 `src/collector_*.py` 下载到设备 `/usr/`。
-2. 以 `src/device.example.json` 为模板创建 `/usr/device.json`：填写ProductKey、DeviceName、MQTT实例地址，并填写DeviceSecret；若使用动态注册则只填写ProductSecret。动态注册取得的密钥由程序自动缓存为 `/usr/device_secret.json`。
+1. 首次部署下载 `src/main.py` 和全部 `src/collector_*.py` 到 `/usr/`。576 KiB模组的云连接、配置、迁移三个模块须使用 `dist/collector_app_4.1.5/` 中的压缩制品，去掉文件名末尾的 `.bin` 后下载，留足凭证和运行空间。已有4.1.4设备使用下面的三文件OTA包。
+2. 以 `src/device.example.json` 为模板创建 `/usr/device.json`：填写ProductKey、DeviceName、MQTT实例地址，并填写DeviceSecret；若使用动态注册则只填写ProductSecret。密钥保存在 `/usr/device_secret.json` 及 `.bak`，写入中可能存在 `.tmp`；每份不超过4 KiB。历史身份及迁移失败目标的密钥均保留，档案满时拒绝新增注册，不淘汰旧记录。
 3. 将 `doc/model.zip` 导入对应阿里云产品物模型。
 4. 重启设备。设备会先建立256 KiB的 `/usr/.ota_space.reserve`，随后按实际剩余空间创建体征Flash队列；启动日志中的 `flash_frames` 是该设备本次启动的真实容量。
 
@@ -43,13 +43,10 @@
 ```powershell
 python -m unittest discover -s tests -v
 python tools/build_model_zip.py
-python tools/build_ota_package.py --base-version 4.0.13 --target-version 4.0.15 --include collector_app.py --include collector_cloud.py --include collector_config.py --include collector_ota.py --output dist/collector_app_4.0.15
-python tools/build_ota_package.py --base-version 4.0.15 --target-version 4.1.0 --include collector_config.py --include collector_migration.py --include collector_queue.py --output dist/collector_app_4.1.0
-python tools/build_ota_package.py --base-version 4.1.0 --target-version 4.1.1 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.1_DEVICE_NAME
-python tools/build_ota_package.py --base-version 4.1.1 --target-version 4.1.2 --migration-config src/device_migration.json --output private_dist/collector_app_4.1.2_DEVICE_NAME
-python tools/build_ota_package.py --base-version 4.1.2 --target-version 4.1.3 --include collector_app.py --include collector_cloud.py --include collector_config.py --include collector_migration.py --output private_dist/collector_app_4.1.3_from_4.1.2
-python tools/build_ota_package.py --base-version 4.1.3 --target-version 4.1.4 --include collector_app.py --include collector_config.py --migration-config src/device_migration.json --output private_dist/collector_app_4.1.4_RETURN_DEVICE_NAME
+python tools/build_ota_package.py --base-version 4.1.4 --target-version 4.1.5 --include collector_cloud.py --include collector_config.py --include collector_migration.py --compact --output dist/collector_app_4.1.5
 ```
+
+4.1.5的三个模块必须一起升级。`--compact`仅压缩缩进和注释，保留字符串、语法树和源码行号；仓库源码保持可读。升级空间预算为212 KiB，小于256 KiB预留。历史版本应使用已保留的制品，不要用当前源码覆盖构建旧版本包。审查结果见 [4.1.5凭证修复与审查报告](doc/4.1.5凭证修复与审查报告.md)，设备BW-XC-200-002的操作步骤见 [4.1.5单台验收](doc/4.1.5单台验收.md)。
 
 QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌和定位参数，不需要在 `device.json` 中配置。
 
@@ -67,4 +64,4 @@ QuecLocator继续使用原EC600M代码内置的服务器、端口、应用令牌
 
 在576 KiB分区中，完整256 KiB OTA预留优先于Flash体征队列。应用增长后若没有剩余空间建立Flash队列，设备以512帧RAM队列继续工作并输出一次信息日志；这不再被误报为OTA健康恢复失败。
 
-设备身份迁移同样不再使用序号水位线、25%容量门限或旧队列排空。迁移包重启后业务继续保持停止，先完成目标预注册和探测，再切换身份；目标runtimeLog确认且连接稳定120秒后再次重启并恢复正常业务，失败则恢复旧身份后重启。早期4.1.1在EC600M上因精简版`str`缺少字母数字判断方法而于迁移预检失败；已安装该版本的设备必须定向安装4.1.2修复包。执行这一趟的仍是板内旧OTA代码，可能仍需停止下位机并满足60秒静默；4.1.2运行后，后续升级不再需要该维护窗口。
+设备身份迁移同样不再使用序号水位线、25%容量门限或旧队列排空。迁移包重启后业务继续保持停止，优先复用目标历史凭证；仅无凭证时预注册，持久保存后才探测和切换身份。目标runtimeLog确认且连接稳定120秒后再次重启并恢复正常业务，失败则恢复旧身份后重启。恢复写入失败会保留状态并重试；启动时恢复失败会中止应用，等待存储修复和重启。早期4.1.1的精简版`str`兼容问题和历史升级顺序见部署文档。

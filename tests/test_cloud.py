@@ -5,6 +5,7 @@ import hmac
 import tempfile
 import types
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,18 +17,26 @@ from collector_cloud import (  # noqa: E402
     CloudClient,
     _load_mqtt_client,
     hmac_sha256_hex,
+    extract_device_secret,
     ticks_ms,
 )
-from collector_config import DeviceConfig  # noqa: E402
+import collector_cloud as cloud_module
+import collector_config as config_module
+from collector_config import DeviceConfig, CredentialStoreError, save_cached_device_secret  # noqa: E402
 from collector_queue import DeliveryStore, RawFrameQueue, SequenceCounter  # noqa: E402
 
 
 class FakeLogger:
     def __init__(self):
         self.warn_calls = []
+        self.error_calls = []
 
     def warn(self, *args, **kwargs):
         self.warn_calls.append((args, kwargs))
+        return True
+
+    def error(self, *args, **kwargs):
+        self.error_calls.append((args, kwargs))
         return True
 
     def __getattr__(self, _name):
@@ -372,6 +381,145 @@ class CloudAckTests(unittest.TestCase):
             cloud.connected = True
             self.assertTrue(cloud.publish_raw("topic", "payload", qos=1))
             self.assertEqual(calls, [(b"topic", b"payload", False, 1)])
+
+
+class CredentialConnectionTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        directory = self.stack.enter_context(tempfile.TemporaryDirectory())
+        self.path = str(Path(directory) / "device_secret.json")
+        self.stack.enter_context(patch.multiple(
+            config_module, DEVICE_SECRET_CACHE_FILE=self.path,
+            LEGACY_DEVICE_SECRET_CACHE_FILE=str(Path(directory) / "legacy.json")))
+        self.config = DeviceConfig({
+            "productKey": "pk", "deviceName": "dn",
+            "mqttServer": "example.aliyuncs.com", "productSecret": "product-secret",
+        })
+        self.cloud = CloudClient(self.config, types.SimpleNamespace(release_all=lambda: None), FakeLogger())
+        self.cloud.publish_properties = lambda *_args, **_kwargs: True
+        self.stack.enter_context(patch.object(cloud_module, "_thread", None))
+
+    def test_repeated_timeouts_auth4_and_subscribe_failures_never_reregister(self):
+        save_cached_device_secret(self.config, "retained-secret")
+        original = Path(self.path).read_bytes()
+        attempts, passwords = [], []
+        class Mqtt:
+            def __init__(inner, *args, **kwargs):
+                passwords.append(args[4])
+            def set_callback(inner, cb):
+                pass
+            def connect(inner, **kwargs):
+                attempts.append(True)
+                if len(attempts) <= 6:
+                    raise OSError("MQTT Connect Error='4'" if len(attempts) % 2 else "timed out")
+            def subscribe(inner, *args):
+                if len(attempts) < 10:
+                    raise OSError("subscribe timed out")
+            def close(inner):
+                pass
+        readiness = []
+        delays = []
+        def network_ready():
+            readiness.append(True)
+            return len(readiness) > 2
+        def sleep(ms):
+            delays.append(ms)
+            if self.cloud.connected:
+                self.cloud.stop = True
+            self.assertLess(len(delays), 30)
+        with patch.object(self.cloud, "_network_ready", side_effect=network_ready), patch.object(
+            cloud_module, "_load_mqtt_client", return_value=Mqtt
+        ), patch.object(cloud_module, "dynamic_register_secret") as register, patch.object(
+            cloud_module, "sleep_ms", side_effect=sleep
+        ):
+            self.cloud._connection_worker()
+        self.assertEqual(len(attempts), 10)
+        register.assert_not_called()
+        self.assertEqual(Path(self.path).read_bytes(), original)
+        self.assertTrue(self.cloud.connected)
+        self.assertEqual(self.cloud.connect_failures, 0)
+        errors = str(self.cloud.logger.error_calls)
+        self.assertIn("mqtt_login", errors)
+        self.assertIn("subscribe", errors)
+        self.assertNotIn("retained-secret", errors)
+        self.assertNotIn("product-secret", errors)
+        self.assertTrue(all(password not in errors for password in passwords))
+        self.assertIn(300000, delays)
+
+    def test_read_failure_or_corruption_blocks_registration(self):
+        for mode in ("io", "corrupt"):
+            with self.subTest(mode=mode):
+                Path(self.path).write_text("[]")
+                with ExitStack() as stack:
+                    if mode == "io":
+                        stack.enter_context(patch("collector_config.open", side_effect=OSError(5)))
+                    register = stack.enter_context(patch.object(cloud_module, "dynamic_register_secret"))
+                    with self.assertRaises(CredentialStoreError):
+                        self.cloud._get_device_secret()
+                    register.assert_not_called()
+                    self.assertEqual(self.cloud.connect_stage, "credential_read")
+
+    def test_pending_registration_retries_persistence_before_any_login(self):
+        real_write = config_module._write_credential_file
+        with patch.object(cloud_module, "dynamic_register_secret", return_value="new-device-key") as register:
+            with patch.object(config_module, "_write_credential_file", side_effect=CredentialStoreError("disk full")), patch.object(
+                cloud_module, "_load_mqtt_client"
+            ) as mqtt:
+                for _ in range(5):
+                    with self.assertRaises(CredentialStoreError):
+                        self.cloud._connect_once()
+                self.assertEqual(self.cloud.pending_secret, "new-device-key")
+                self.assertEqual(self.cloud.connect_stage, "credential_write")
+                mqtt.assert_not_called()
+            with patch.object(config_module, "_write_credential_file", wraps=real_write):
+                self.assertEqual(self.cloud._get_device_secret(), "new-device-key")
+            register.assert_called_once()
+        self.assertEqual(self.cloud.pending_secret, "")
+        self.assertEqual(config_module.load_cached_device_secret(self.config), "new-device-key")
+        # A newly constructed client after reboot reads disk and never registers.
+        with patch.object(cloud_module, "dynamic_register_secret") as register:
+            fresh = CloudClient(self.config, self.cloud.delivery, FakeLogger())
+            self.assertEqual(fresh._get_device_secret(), "new-device-key")
+            register.assert_not_called()
+
+    def test_archive_full_does_not_disconnect_existing_config_identity(self):
+        self.config.device_secret = "known-key"
+        with patch.object(cloud_module, "save_cached_device_secret", side_effect=config_module.CredentialStoreFull("full")), patch.object(
+            cloud_module, "dynamic_register_secret"
+        ) as register:
+            self.assertEqual(self.cloud._get_device_secret(), "known-key")
+            register.assert_not_called()
+            self.assertTrue(self.cloud.logger.warn_calls)
+
+    def test_full_archive_prevents_new_registration(self):
+        with patch.object(cloud_module, "check_credential_capacity", side_effect=config_module.CredentialStoreFull("full")), patch.object(
+            cloud_module, "dynamic_register_secret"
+        ) as register:
+            with self.assertRaises(config_module.CredentialStoreFull):
+                self.cloud._get_device_secret()
+            register.assert_not_called()
+
+    def test_registration_reply_rejects_non_string_or_empty_values(self):
+        for invalid in (None, 42, {}, [], True, "", " ", "secret\n", "a" * 129):
+            for nested in (False, True):
+                reply = {"deviceSecret": invalid}
+                if nested:
+                    reply = {"data": reply}
+                with self.subTest(invalid=invalid, nested=nested):
+                    self.assertEqual(extract_device_secret(json.dumps(reply)), "")
+        for root in ([], None, "text", 42):
+            self.assertEqual(extract_device_secret(json.dumps(root)), "")
+        self.assertEqual(extract_device_secret('{"deviceSecret":"good-key"}'), "good-key")
+        self.assertEqual(extract_device_secret('{"data":{"deviceSecret":"good-key"}}'), "good-key")
+
+    def test_connection_error_redacts_all_auth_material(self):
+        self.config.device_secret = "direct-key"
+        self.cloud.pending_secret = "pending-key"
+        self.cloud.auth_secret = "cached-key"
+        self.cloud.auth_password = "signed-password"
+        raw = "product-secret direct-key pending-key cached-key signed-password"
+        self.assertEqual(self.cloud._connect_error_text(OSError(raw)), " ".join(["[redacted]"] * 5))
 
 
 if __name__ == "__main__":

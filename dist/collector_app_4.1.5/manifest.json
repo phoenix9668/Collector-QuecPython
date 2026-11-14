@@ -1,0 +1,48 @@
+{
+  "module": "collector_app",
+  "version": "4.1.5",
+  "baseVersion": "4.1.4",
+  "changedFilesOnly": true,
+  "signMethod": "MD5",
+  "alignedBytes": 81920,
+  "fileAlignedBytes": 73728,
+  "directoryBytes": 8192,
+  "backupAlignedBytes": 98304,
+  "copyModeExtraBytes": 0,
+  "limitBytes": 180224,
+  "selfUpdateRequiredBytes": 217088,
+  "files": [
+    {
+      "fileName": "collector_cloud.py.bin",
+      "fileSize": 33814,
+      "fileMd5": "0804962b76d5892cdea2f839448d91fc",
+      "signMethod": "MD5",
+      "target": "/usr/collector_cloud.py",
+      "sourceFileSize": 43951,
+      "sourceFileMd5": "10c3ce42c5074790ed3e86fedd253251"
+    },
+    {
+      "fileName": "collector_config.py.bin",
+      "fileSize": 14493,
+      "fileMd5": "eea27ce429c20313295b0fc1e0876678",
+      "signMethod": "MD5",
+      "target": "/usr/collector_config.py",
+      "sourceFileSize": 17961,
+      "sourceFileMd5": "b166f396bd63053cac9ed0814b025533"
+    },
+    {
+      "fileName": "collector_migration.py.bin",
+      "fileSize": 20125,
+      "fileMd5": "0ad9c94e1edea767b9223a7194199fbe",
+      "signMethod": "MD5",
+      "target": "/usr/collector_migration.py",
+      "sourceFileSize": 24426,
+      "sourceFileMd5": "73041a25870336facf71937e0156e699"
+    }
+  ],
+  "containsSecrets": false,
+  "compactSource": true,
+  "extData": {
+    "_package_udi": "{\"files\": {\"collector_cloud.py.bin\": \"/usr/collector_cloud.py\", \"collector_config.py.bin\": \"/usr/collector_config.py\", \"collector_migration.py.bin\": \"/usr/collector_migration.py\"}}"
+  }
+}

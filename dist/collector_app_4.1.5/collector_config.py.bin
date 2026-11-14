@@ -1,0 +1,523 @@
+"""Collector application constants and per-device configuration.
+
+The repository contains no Aliyun device or product credential.  A device must
+provide /usr/device.json before the cloud connection is started.
+"""
+
+try:
+ import ujson as json
+except ImportError:
+ import json
+
+try:
+ import uos as os
+except ImportError:
+ import os
+
+try:
+ import _thread
+except ImportError:
+ _thread = None
+
+_credential_lock = _thread.allocate_lock() if _thread else None
+
+PROJECT_NAME = "QuecPython_EC600M"
+PROJECT_VERSION = "4.1.5"
+OTA_MODULE_NAME = "collector_app"
+OTA_MULTI_FILE_TARGETS = (
+ "/usr/collector_app.py",
+ "/usr/collector_cloud.py",
+ "/usr/collector_config.py",
+ "/usr/collector_log.py",
+ "/usr/collector_migration.py",
+ "/usr/collector_ota.py",
+ "/usr/collector_protocol.py",
+ "/usr/collector_queue.py",
+ "/usr/collector_sensors.py",
+ "/usr/collector_uart.py",
+)
+
+DEVICE_CONFIG_FILE = "/usr/device.json"
+DEVICE_SECRET_CACHE_FILE = "/usr/device_secret.json"
+CREDENTIAL_FILE_BYTES = 4096
+CREDENTIAL_STORAGE_BYTES = 3 * CREDENTIAL_FILE_BYTES
+DEVICE_SECRET_MAX_LENGTH = 128
+DEVICE_MIGRATION_FILE = "/usr/device_migration.json"
+MIGRATION_STATE_0 = "/usr/.migration_state.0"
+MIGRATION_STATE_1 = "/usr/.migration_state.1"
+MIGRATION_DONE_FILE = "/usr/.migration_done.json"
+COLLECTOR_SETTINGS_FILE = "/usr/collector_settings.json"
+LEGACY_DEVICE_CONFIG_FILE = "/usr/config/device.json"
+LEGACY_DEVICE_SECRET_CACHE_FILE = "/usr/config/device_secret.json"
+SEQUENCE_FILE = "/usr/data/signs_sequence.json"
+
+CELL_LOCATOR_HOST = "www.queclocator.com"
+CELL_LOCATOR_PORT = 80
+CELL_LOCATOR_TOKEN = "qa6qTK91597826z6"
+CELL_LOCATOR_LOCATION_TYPE = 8
+CELL_LOCATOR_TIMEOUT = 1
+
+UART_BAUDRATE = 115200
+UART_RX_RING_TARGET = 32 * 1024
+UART_RX_RING_MINIMUM = 16 * 1024
+FRAME_QUEUE_TARGET = 512
+FRAME_QUEUE_FALLBACKS = (512, 256, 128)
+SIGNS_FRAME_SIZE = 206
+INFLIGHT_LIMIT = 16
+ACK_TIMEOUT_MS = 15000
+ACK_RETRY_LIMIT = 3
+EVENT_INFLIGHT_LIMIT = 2
+EVENT_ACK_TIMEOUT_MS = 15000
+EVENT_ACK_RETRY_LIMIT = 3
+EVENT_PUBLISH_INTERVAL_MS = 1000
+
+
+
+
+SIGNS_MQTT_QOS = 0
+SIGNS_PUBLISH_INTERVAL_MS = 40
+
+RAM_SPILL_HIGH_WATERMARK = 75
+RAM_OTA_LOW_WATERMARK = 25
+SPILL_BATCH_FRAMES = 32
+FLASH_SPOOL_MAX_BYTES = 96 * 1024
+FLASH_SPOOL_DIR = "/usr/data"
+FLASH_SPOOL_FILE = "/usr/data/signs.queue"
+FLASH_SPOOL_META_0 = "/usr/data/signs.meta.0"
+FLASH_SPOOL_META_1 = "/usr/data/signs.meta.1"
+
+OTA_MAX_APP_BYTES = 176 * 1024
+OTA_DIRECTORY_BYTES = 8 * 1024
+OTA_RESERVED_BYTES = 256 * 1024
+FILESYSTEM_SAFETY_BYTES = 16 * 1024
+OTA_RESERVE_FILE = "/usr/.ota_space.reserve"
+OTA_HEALTH_PENDING_FILE = "/usr/.ota_pending.json"
+OTA_HEALTH_OK_FILE = "/usr/.ota_healthy"
+OTA_UPDATER_DIR = "/usr/.updater"
+OTA_HEALTH_CONFIRM_SECONDS = 90
+
+LOCAL_LOG_DIR = "/usr/log"
+LOCAL_LOG_MAX_BYTES = 8 * 1024
+LOCAL_LOG_TOTAL_BYTES = 16 * 1024
+
+
+
+
+
+
+
+MIGRATION_STORAGE_ALLOWANCE_BYTES = 20 * 1024
+RUNTIME_STORAGE_ALLOWANCE_BYTES = (
+ LOCAL_LOG_TOTAL_BYTES + 16 * 1024 + CREDENTIAL_STORAGE_BYTES
+ + MIGRATION_STORAGE_ALLOWANCE_BYTES
+)
+
+MIGRATION_CONFIRM_SECONDS = 120
+MIGRATION_ROLLBACK_SECONDS = 180
+
+MQTT_PORT = 1883
+MQTT_KEEPALIVE = 60
+DYNAMIC_REGISTER_TOPIC = "/ext/register"
+DYNAMIC_REGISTER_TIMEOUT_MS = 12000
+DYNAMIC_REGISTER_POLL_MS = 200
+ALIYUN_SIGN_METHOD = "hmacsha256"
+
+
+def _text(data, key, default=""):
+ value = data.get(key, default)
+ if value is None:
+  return ""
+ return str(value).strip()
+
+
+def _validate_identity(name, value):
+ if not value:
+  raise ValueError("device config missing {}".format(name))
+ if "/" in value or "+" in value or "#" in value:
+  raise ValueError("invalid {}".format(name))
+ return value
+
+
+def ensure_dir(path):
+ """Create a directory tree on both QuecPython and CPython."""
+ if not path:
+  return
+ current = ""
+ absolute = path.startswith("/")
+ for part in path.replace("\\", "/").split("/"):
+  if not part:
+   continue
+  if current:
+   current += "/" + part
+  else:
+   current = ("/" if absolute else "") + part
+  try:
+   os.mkdir(current)
+  except Exception:
+   pass
+
+
+def atomic_json_write(path, payload):
+ parent = path.replace("\\", "/").rsplit("/", 1)[0]
+ ensure_dir(parent)
+ temp_path = path + ".tmp"
+ with open(temp_path, "w") as stream:
+  stream.write(json.dumps(payload))
+  try:
+   stream.flush()
+  except Exception:
+   pass
+ try:
+  os.remove(path)
+ except Exception:
+  pass
+ os.rename(temp_path, path)
+
+
+class DeviceConfig:
+ def __init__(self, values):
+  self.product_key = _validate_identity(
+   "productKey", _text(values, "productKey")
+  )
+  self.device_name = _validate_identity(
+   "deviceName", _text(values, "deviceName")
+  )
+  self.mqtt_server = _text(values, "mqttServer")
+  if not self.mqtt_server:
+   raise ValueError("device config missing mqttServer")
+  self.mqtt_port = int(values.get("mqttPort", MQTT_PORT))
+  self.device_secret = _text(values, "deviceSecret")
+  self.product_secret = _text(values, "productSecret")
+  for key in ("deviceSecret", "productSecret"):
+   value = values.get(key)
+   if value not in (None, "") and not valid_device_secret(value):
+    raise ValueError("invalid " + key)
+  if not self.device_secret and not self.product_secret:
+   raise ValueError("deviceSecret or productSecret is required")
+  allowed = values.get("otaAllowedHosts", [])
+  if not isinstance(allowed, list):
+   raise ValueError("otaAllowedHosts must be an array")
+  self.ota_allowed_hosts = []
+  for host in allowed:
+   host = str(host).strip().lower()
+   if host:
+    self.ota_allowed_hosts.append(host)
+  if not self.ota_allowed_hosts:
+   self.ota_allowed_hosts = [
+    ".aliyuncs.com",
+    ".aliyun.com",
+   ]
+
+ def topic(self, suffix):
+  return "/sys/{}/{}/{}".format(
+   self.product_key, self.device_name, suffix
+  )
+
+ def ota_topic(self, action):
+  return "/ota/device/{}/{}/{}".format(
+   action, self.product_key, self.device_name
+  )
+
+ def as_dict(self, include_device_secret=True):
+  values = {
+   "productKey": self.product_key,
+   "deviceName": self.device_name,
+   "mqttServer": self.mqtt_server,
+   "mqttPort": self.mqtt_port,
+   "productSecret": self.product_secret,
+   "otaAllowedHosts": list(self.ota_allowed_hosts),
+  }
+  if include_device_secret:
+   values["deviceSecret"] = self.device_secret
+  else:
+   values["deviceSecret"] = ""
+  return values
+
+
+def load_device_config(path=DEVICE_CONFIG_FILE):
+ candidates = (path, path + ".tmp")
+ if path == DEVICE_CONFIG_FILE:
+  candidates += (
+   LEGACY_DEVICE_CONFIG_FILE,
+   LEGACY_DEVICE_CONFIG_FILE + ".tmp",
+  )
+ last_error = None
+ for candidate in candidates:
+  try:
+   with open(candidate, "r") as stream:
+    data = json.loads(stream.read())
+   if not isinstance(data, dict):
+    raise ValueError("device config root must be an object")
+   return DeviceConfig(data)
+  except Exception as error:
+   last_error = error
+ if last_error:
+  raise last_error
+ raise OSError("device config unavailable")
+
+
+class CredentialStoreError(OSError):
+ pass
+
+
+class CredentialStoreFull(CredentialStoreError):
+ pass
+
+
+class CredentialReadError(CredentialStoreError):
+ pass
+
+
+def valid_device_secret(secret):
+ return (
+  isinstance(secret, str) and 0 < len(secret) <= DEVICE_SECRET_MAX_LENGTH
+  and all(33 <= ord(c) <= 126 for c in secret)
+ )
+
+
+def redact_credential_values(message, values):
+ message = str(message)
+ for value in values:
+  if isinstance(value, str) and value:
+   message = message.replace(value, "[redacted]")
+ return message
+
+
+def _credential_record(config, secret):
+ if not valid_device_secret(secret):
+  raise CredentialStoreError("invalid DeviceSecret")
+ return [config.product_key, config.device_name, secret]
+
+
+def _merge_credentials(records, incoming):
+ for record in incoming:
+  if record in records:
+   records.remove(record)
+  records.append(record)
+
+
+def _decode_credentials(raw):
+ from collector_queue import crc32
+
+ data = json.loads(raw)
+ if not isinstance(data, dict):
+  raise ValueError()
+ current = [data.get(k) for k in ("productKey", "deviceName", "deviceSecret")]
+ generation = 0
+ records = [current]
+ if "version" in data:
+  body = data["body"]
+  version, generation, records = json.loads(body)
+  if (version != 1 or data["version"] != 1
+    or not isinstance(generation, int) or generation < 1
+    or generation != data["generation"]
+    or crc32(body.encode("utf-8")) != data["crc32"]
+    or not records or records[-1] != current):
+   raise ValueError()
+ if not isinstance(records, list):
+  raise ValueError()
+ for record in records:
+  if not isinstance(record, list) or len(record) != 3:
+   raise ValueError()
+  for name in record[:2]:
+   if not isinstance(name, str) or not name or name != name.strip():
+    raise ValueError()
+   _validate_identity("credential identity", name)
+  if not valid_device_secret(record[2]):
+   raise ValueError()
+ return generation, records
+
+
+def _read_credential_file(path):
+ try:
+  with open(path, "r") as stream:
+   raw = stream.read(CREDENTIAL_FILE_BYTES + 1)
+ except OSError as error:
+  if error.args and error.args[0] == 2:
+   return None
+  raise CredentialReadError("credential read failed")
+ except Exception:
+  raise CredentialReadError("credential read failed")
+ try:
+  if len(raw.encode("utf-8")) > CREDENTIAL_FILE_BYTES:
+   raise ValueError()
+  return _decode_credentials(raw)
+ except Exception:
+  raise CredentialStoreError("credential snapshot corrupt")
+
+
+def _read_credentials(path):
+
+
+ groups = [(path + ".bak", path, path + ".tmp")]
+ if path == DEVICE_SECRET_CACHE_FILE:
+  groups.insert(0, (LEGACY_DEVICE_SECRET_CACHE_FILE,
+        LEGACY_DEVICE_SECRET_CACHE_FILE + ".tmp"))
+ copies, records, failure, write_failure = {}, [], None, None
+ generation = 0
+ for group in groups:
+  good, error = [], None
+  for candidate in group:
+   try:
+    value = _read_credential_file(candidate)
+    if value is not None:
+     copies[candidate] = value
+     index = len(good)
+     while index and good[index - 1][0] > value[0]:
+      index -= 1
+     good.insert(index, value)
+   except CredentialStoreError as caught:
+    error = failure = caught
+    if isinstance(caught, CredentialReadError):
+     write_failure = caught
+  if error and not good:
+   write_failure = error
+  for number, incoming in good:
+   generation = max(generation, number)
+   _merge_credentials(records, incoming)
+ return records, generation, copies, failure, write_failure
+
+
+def _credential_payload(records, generation):
+ from collector_queue import crc32
+
+ body = json.dumps([1, generation, records])
+ current = records[-1]
+ raw = json.dumps({
+  "productKey": current[0], "deviceName": current[1],
+  "deviceSecret": current[2], "version": 1, "generation": generation,
+  "body": body, "crc32": crc32(body.encode("utf-8")),
+ })
+ if len(raw.encode("utf-8")) > CREDENTIAL_FILE_BYTES:
+  raise CredentialStoreFull("credential archive full; identities retained")
+ return raw
+
+
+def _write_credential_file(path, raw):
+
+
+ try:
+  with open(path, "w") as stream:
+   count = stream.write(raw)
+   if count is not None and count != len(raw):
+    raise OSError()
+   flush = getattr(stream, "flush", None)
+   if flush:
+    flush()
+  with open(path, "r") as stream:
+   if stream.read(CREDENTIAL_FILE_BYTES + 1) != raw:
+    raise OSError()
+  _decode_credentials(raw)
+ except Exception:
+  raise CredentialStoreError("credential write verification failed")
+
+
+def load_cached_device_secret(config, path=None):
+ path = path or DEVICE_SECRET_CACHE_FILE
+ if _credential_lock:
+  _credential_lock.acquire()
+ try:
+  records, _generation, _copies, failure, _write_failure = _read_credentials(path)
+  for record in reversed(records):
+   if record[:2] == [config.product_key, config.device_name]:
+    return record[2]
+  if failure:
+   raise failure
+  return ""
+ finally:
+  if _credential_lock:
+   _credential_lock.release()
+
+
+def _save_credentials(config, secret, path, capacity_only=False):
+ records, generation, copies, failure, write_failure = _read_credentials(path)
+ if write_failure or (capacity_only and failure):
+  raise write_failure or failure
+ old_records = list(records)
+ _merge_credentials(records, [_credential_record(config, secret)])
+ raw = _credential_payload(records, generation + 1)
+ if capacity_only:
+  if hasattr(os, "statvfs"):
+   try:
+    info = os.statvfs(path.replace("\\", "/").rsplit("/", 1)[0])
+   except OSError:
+    raise CredentialStoreError("credential capacity check failed")
+   needed = sum(CREDENTIAL_FILE_BYTES for name in (path, path + ".bak", path + ".tmp")
+       if name not in copies)
+   if int(info[0]) * int(info[3]) < needed:
+    raise CredentialStoreFull("credential disk space insufficient")
+  return
+ primary, backup = copies.get(path), copies.get(path + ".bak")
+ if (primary and backup and primary[0] > 0 and backup[0] > 0
+   and primary[1] == records and backup[1] == records):
+  return
+ ensure_dir(path.replace("\\", "/").rsplit("/", 1)[0])
+
+
+ first = None
+ for candidate in (path + ".tmp", path + ".bak", path):
+  others = []
+  for name in copies:
+   if name != candidate:
+    others.extend(copies[name][1])
+  if all(record in others for record in old_records):
+   first = candidate
+   break
+ if first is None:
+  raise CredentialStoreError("credential copies require manual recovery")
+ _write_credential_file(first, raw)
+ for candidate in (path + ".bak", path):
+  if candidate != first:
+   _write_credential_file(candidate, raw)
+ try:
+  os.remove(path + ".tmp")
+ except OSError:
+  pass
+
+
+def save_cached_device_secret(config, secret, path=None):
+ if _credential_lock:
+  _credential_lock.acquire()
+ try:
+  _save_credentials(config, secret, path or DEVICE_SECRET_CACHE_FILE)
+ finally:
+  if _credential_lock:
+   _credential_lock.release()
+
+
+def check_credential_capacity(config, path=None):
+ """Refuse a new registration before the bounded archive is exhausted."""
+ if _credential_lock:
+  _credential_lock.acquire()
+ try:
+
+
+  _save_credentials(config, "\\" * DEVICE_SECRET_MAX_LENGTH,
+        path or DEVICE_SECRET_CACHE_FILE, True)
+ finally:
+  if _credential_lock:
+   _credential_lock.release()
+
+
+def load_uart_sample_log(path=COLLECTOR_SETTINGS_FILE):
+ """Load the persistent raw-UART sampling switch, defaulting safely off."""
+ for candidate in (path, path + ".tmp"):
+  try:
+   with open(candidate, "r") as stream:
+    data = json.loads(stream.read())
+  except Exception:
+   continue
+  if not isinstance(data, dict):
+   continue
+  value = data.get("uartSampleLog", False)
+  if value is True or value == 1:
+   return True
+  if value is False or value == 0:
+   return False
+ return False
+
+
+def save_uart_sample_log(enabled, path=COLLECTOR_SETTINGS_FILE):
+ """Persist only non-secret operator settings outside device.json."""
+ atomic_json_write(path, {"uartSampleLog": bool(enabled)})
+ return True

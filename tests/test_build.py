@@ -114,16 +114,17 @@ class BuildTests(unittest.TestCase):
     def test_incremental_build_omits_unchanged_modules_and_fits_device(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release"
-            manifest = build(
-                output,
-                "4.0.15",
-                target_version="4.1.0",
-                include_files=(
-                    "collector_config.py",
-                    "collector_migration.py",
-                    "collector_queue.py",
-                ),
-            )
+            # These limits describe the retained 4.1.0 bridge, not today's
+            # source with an old version number pasted onto it.
+            source = Path(directory) / "source"
+            source.mkdir()
+            names = ("collector_config.py", "collector_migration.py", "collector_queue.py", "collector_cloud.py")
+            for name in names:
+                artifact = build_module._installed_base_artifact(
+                    ROOT / "dist" / "collector_app_4.1.0", name + ".bin")
+                (source / name).write_bytes(artifact.read_bytes())
+            with patch.object(build_module, "SOURCE", source), patch.object(build_module, "VERSION", "4.1.0"):
+                manifest = build(output, "4.0.15", target_version="4.1.0", include_files=names)
             self.assertTrue(manifest["changedFilesOnly"])
             self.assertEqual(manifest["baseVersion"], "4.0.15")
             self.assertEqual(manifest["version"], "4.1.0")
@@ -256,6 +257,59 @@ class BuildTests(unittest.TestCase):
             self.assertGreaterEqual(
                 manifest["backupAlignedBytes"], manifest["fileAlignedBytes"]
             )
+
+    def test_compact_source_preserves_multiline_strings_semantics_and_lines(self):
+        source = ('# file comment\nclass Example:\n'
+                  '    """Multiline docstring\n        # keep this content\n    """\n'
+                  '    def value(self):\n'
+                  '        return {"#literal": "space  here"}  # comment\n')
+        result = build_module.compact_source(source)
+        self.assertLess(len(result), len(source))
+        self.assertEqual(ast.dump(ast.parse(source)), ast.dump(ast.parse(result)))
+        original, compact = {}, {}
+        exec(compile(source, "original", "exec"), original)
+        exec(compile(result, "compact", "exec"), compact)
+        self.assertEqual(original["Example"].__doc__, compact["Example"].__doc__)
+        self.assertEqual(original["Example"]().value(), compact["Example"]().value())
+        self.assertEqual(original["Example"].value.__code__.co_firstlineno,
+                         compact["Example"].value.__code__.co_firstlineno)
+
+    def test_415_release_fits_ota_and_ram_only_partition_with_credentials(self):
+        from collector_config import CREDENTIAL_STORAGE_BYTES
+        from collector_queue import StorageBudget
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            names = ("collector_cloud.py", "collector_config.py", "collector_migration.py")
+            manifest = build(output, "4.1.4", include_files=names, compact=True)
+            self.assertEqual(manifest["version"], "4.1.5")
+            self.assertLessEqual(manifest["selfUpdateRequiredBytes"], OTA_RESERVED_BYTES)
+            self.assertEqual(len(manifest["files"]), 3)
+            self.assertFalse(manifest["containsSecrets"])
+            self.assertNotIn("device_migration.json.bin", [f["fileName"] for f in manifest["files"]])
+            installed = 0
+            for source in (ROOT / "src").glob("*.py"):
+                artifact = output / (source.name + ".bin")
+                original = source.read_text(encoding="utf-8")
+                deployed = artifact.read_text(encoding="utf-8") if artifact.exists() else original
+                installed += build_module.aligned_size(len(deployed.encode("utf-8")))
+                if artifact.exists():
+                    self.assertEqual(ast.dump(ast.parse(deployed)), ast.dump(ast.parse(original)))
+                    self.assertEqual(deployed.count("\n"), original.count("\n"))
+            # Normal RAM-only installation: /data and /log directories (16K),
+            # two logs (16K); config, system_config, settings, sequence, health,
+            # migration-done files (24K); two credential copies (8K).
+            steady_metadata = (16 + 16 + 24 + 8) * 1024
+            steady = installed + OTA_RESERVED_BYTES + steady_metadata
+            self.assertLessEqual(steady + FILESYSTEM_SAFETY_BYTES, 576 * 1024)
+            # Concurrent sequence/settings .tmp plus credential .tmp consume
+            # 12K of the 16K spare; each credential snapshot is bounded to 4K.
+            self.assertEqual(CREDENTIAL_STORAGE_BYTES, 12 * 1024)
+            self.assertLessEqual(steady + 12 * 1024, 576 * 1024)
+            budget = StorageBudget(root=directory, reserve_path=str(output / "reserve"))
+            budget.reserve_ready = True
+            with patch("collector_queue.filesystem_free_bytes", return_value=576 * 1024 - steady):
+                self.assertEqual(budget.spool_budget(), 0)
 
 
 if __name__ == "__main__":

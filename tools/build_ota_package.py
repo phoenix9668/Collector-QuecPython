@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
+import io
 import json
 import shutil
 import sys
+import tokenize
 from pathlib import Path
 
 
@@ -28,6 +31,33 @@ from collector_config import (  # noqa: E402
 
 APP_FOTA_OVERHEAD_BYTES = 20 * 1024
 PRIVATE_OUTPUT_ROOT = ROOT / "private_dist"
+
+
+def compact_source(source: str) -> str:
+    """Reduce deployment whitespace, preserving strings, AST and line numbers."""
+    lines = source.splitlines(keepends=True)
+    string_lines = set()
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == tokenize.STRING:
+            string_lines.update(range(token.start[0] + 1, token.end[0] + 1))
+        elif token.type == tokenize.COMMENT:
+            line = lines[token.start[0] - 1]
+            lines[token.start[0] - 1] = line[:token.start[1]] + ("\n" if line.endswith("\n") else "")
+    for index, line in enumerate(lines):
+        if index + 1 in string_lines:
+            continue
+        prefix = len(line) - len(line.lstrip(" \t"))
+        if "\t" in line[:prefix]:
+            raise ValueError("compact OTA requires space indentation")
+        suffix = "\n" if line.endswith("\n") else ""
+        value = line[prefix:].rstrip()
+        lines[index] = ((" " * (prefix // 4 + prefix % 4) + value) if value else "") + suffix
+    result = "".join(lines)
+    if ast.dump(ast.parse(source)) != ast.dump(ast.parse(result)):
+        raise ValueError("compact OTA changed Python semantics")
+    if source.count("\n") != result.count("\n"):
+        raise ValueError("compact OTA changed traceback line numbers")
+    return result
 
 
 def aligned_size(size: int) -> int:
@@ -167,6 +197,7 @@ def build(
     force_include: tuple[str, ...] = (),
     migration_config: Path | None = None,
     include_files: tuple[str, ...] = (),
+    compact: bool = False,
 ) -> dict:
     target_version = target_version or VERSION
     forced = set(force_include)
@@ -248,6 +279,9 @@ def build(
                 raise ValueError("cannot locate PROJECT_VERSION for package override")
             source_text = source_text.replace(current, replacement, 1)
         compile(source_text, str(source), "exec")
+        source_bytes = source_text.encode("utf-8")
+        if compact:
+            source_text = compact_source(source_text)
         artifact = output / (source.name + ".bin")
         artifact.write_text(source_text, encoding="utf-8", newline="")
         base_artifact = _installed_base_artifact(base_directory, artifact.name)
@@ -268,8 +302,10 @@ def build(
         size = artifact.stat().st_size
         total += aligned_size(size)
         if base_directory is None:
-            # A normal full build budgets the installed target at the new size.
-            backup_file_bytes += aligned_size(size)
+            # Do not budget a pre-compaction base using the smaller artifact.
+            # Without a base manifest, source size remains the estimate; the
+            # device still checks actual installed rollback sizes before OTA.
+            backup_file_bytes += aligned_size(max(size, len(source_bytes)))
         elif base_artifact is not None and base_artifact.is_file():
             backup_file_bytes += aligned_size(base_artifact.stat().st_size)
         else:
@@ -283,6 +319,8 @@ def build(
                 "fileMd5": md5(artifact),
                 "signMethod": "MD5",
                 "target": target,
+                "sourceFileSize": len(source_bytes),
+                "sourceFileMd5": hashlib.md5(source_bytes).hexdigest(),
             }
         )
     if migration_config is not None:
@@ -355,6 +393,7 @@ def build(
         ),
         "files": files,
         "containsSecrets": migration_config is not None,
+        "compactSource": compact,
         "extData": {"_package_udi": json.dumps(custom_info, ensure_ascii=False)},
     }
     if legacy_manifest is not None:
@@ -395,6 +434,8 @@ def main() -> int:
         ),
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--compact", action="store_true",
+                        help="compact indentation/comments with AST and line-number verification")
     parser.add_argument(
         "--target-version",
         help="package version override without changing the checked-in source version",
@@ -419,6 +460,7 @@ def main() -> int:
         force_include=tuple(args.force_include),
         migration_config=args.migration_config,
         include_files=tuple(args.include),
+        compact=args.compact,
     )
     print("built={}".format(output))
     print("files={}".format(len(manifest["files"])))

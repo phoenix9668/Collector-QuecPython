@@ -30,7 +30,13 @@ from collector_config import (
     MQTT_KEEPALIVE,
     PROJECT_VERSION,
     DeviceConfig,
+    CredentialStoreError,
     atomic_json_write,
+    check_credential_capacity,
+    load_cached_device_secret,
+    redact_credential_values,
+    save_cached_device_secret,
+    valid_device_secret,
 )
 from collector_queue import crc32, remove_file
 
@@ -167,23 +173,30 @@ def load_migration_state(paths=None):
     paths = _state_paths(paths)
     best = None
     best_generation = -1
-    for path in paths:
-        wrapper = _read_json(path)
-        if not wrapper:
-            continue
-        try:
-            body = str(wrapper["body"])
-            if int(wrapper["crc32"]) != crc32(body.encode("utf-8")):
-                continue
-            payload = json.loads(body)
-            generation = int(wrapper.get("generation", 0))
-            if isinstance(payload, dict) and generation > best_generation:
-                best = payload
-                best_generation = generation
-        except Exception:
-            continue
+    failed = False
+    for base in paths:
+        for path in (base, base + ".tmp"):
+            try:
+                with open(path, "r") as stream:
+                    wrapper = json.loads(stream.read())
+                body = wrapper["body"]
+                if int(wrapper["crc32"]) != crc32(body.encode("utf-8")):
+                    raise ValueError()
+                payload = json.loads(body)
+                generation = int(wrapper.get("generation", 0))
+                if not isinstance(payload, dict):
+                    raise ValueError()
+                if generation > best_generation:
+                    best, best_generation = payload, generation
+            except OSError as error:
+                if not error.args or error.args[0] != 2:
+                    failed = True
+            except Exception:
+                failed = True
     if best is not None:
         best["_generation"] = best_generation
+    elif failed:
+        raise CredentialStoreError("migration recovery state unavailable")
     return best
 
 
@@ -294,28 +307,41 @@ def _secret_cache_for(config, secret):
     return {
         "productKey": config.product_key,
         "deviceName": config.device_name,
-        "deviceSecret": str(secret),
+        "deviceSecret": secret,
     }
 
 
-def _write_identity(config_data, secret_data):
+def _retain_state_credentials(state):
+    for prefix in ("source", "target"):
+        config = DeviceConfig(state[prefix + "Config"])
+        data = state.get(prefix + "Secret")
+        if data is not None:
+            if (not isinstance(data, dict)
+                    or data.get("productKey") != config.product_key
+                    or data.get("deviceName") != config.device_name
+                    or not valid_device_secret(data.get("deviceSecret"))):
+                raise CredentialStoreError("migration credential identity mismatch")
+            save_cached_device_secret(config, data["deviceSecret"], DEVICE_SECRET_CACHE_FILE)
+        if config.device_secret:
+            save_cached_device_secret(config, config.device_secret, DEVICE_SECRET_CACHE_FILE)
+
+
+def _write_identity(config_data):
+    config = DeviceConfig(config_data)
+    secret = config.device_secret or load_cached_device_secret(config, DEVICE_SECRET_CACHE_FILE)
+    if not secret:
+        raise CredentialStoreError("migration restore credential missing")
+    save_cached_device_secret(config, secret, DEVICE_SECRET_CACHE_FILE)
     atomic_json_write(DEVICE_CONFIG_FILE, config_data)
-    if secret_data:
-        atomic_json_write(DEVICE_SECRET_CACHE_FILE, secret_data)
-    else:
-        remove_file(DEVICE_SECRET_CACHE_FILE)
-        remove_file(DEVICE_SECRET_CACHE_FILE + ".tmp")
+    with open(DEVICE_CONFIG_FILE, "r") as stream:
+        actual = DeviceConfig(json.loads(stream.read()))
+    if actual.as_dict() != config.as_dict():
+        raise CredentialStoreError("migration identity verification failed")
 
 
 def _identity_from_state(state, target):
-    prefix = "target" if target else "source"
-    config_data = state.get(prefix + "Config")
-    secret_data = state.get(prefix + "Secret")
-    if not isinstance(config_data, dict):
-        raise ValueError("migration state missing {} config".format(prefix))
-    if secret_data is not None and not isinstance(secret_data, dict):
-        raise ValueError("migration state has invalid {} secret".format(prefix))
-    _write_identity(config_data, secret_data)
+    _retain_state_credentials(state)
+    _write_identity(state["targetConfig" if target else "sourceConfig"])
 
 
 def recover_identity_before_load():
@@ -328,11 +354,12 @@ def recover_identity_before_load():
             _identity_from_state(state, True)
         else:
             _identity_from_state(state, False)
-    except Exception as error:
+    except Exception:
         try:
-            print("[MIGRATION] boot identity recovery failed: {}".format(error))
+            print("[MIGRATION] boot identity recovery failed; state retained")
         except Exception:
             pass
+        raise
     return state
 
 
@@ -373,8 +400,17 @@ class MigrationManager:
         )
 
     def _debug(self, code, description, extra=""):
+        description, extra = self._safe_error(description), self._safe_error(extra)
         self._usb("failed", "{}: {}".format(code, description))
         self.logger.error("migration", code, description, extra=extra)
+
+    def _safe_error(self, error):
+        values = [self.config.device_secret, self.config.product_secret]
+        for name in ("sourceConfig", "sourceSecret", "targetConfig", "targetSecret"):
+            data = (self.state or {}).get(name)
+            if isinstance(data, dict):
+                values.extend([data.get("deviceSecret"), data.get("productSecret")])
+        return redact_credential_values(error, values)
 
     def _save(self, stage, **values):
         state = dict(self.state or {})
@@ -384,13 +420,15 @@ class MigrationManager:
         return self.state
 
     def _done(self, status, reason=""):
+        if self.state and self.state.get("sourceConfig"):
+            _identity_from_state(self.state, status == "success")
         migration_id = str((self.state or {}).get("migrationId", ""))
         atomic_json_write(
             MIGRATION_DONE_FILE,
             {
                 "migrationId": migration_id,
                 "status": status,
-                "reason": str(reason)[:160],
+                "reason": self._safe_error(reason)[:160],
                 "version": PROJECT_VERSION,
             },
         )
@@ -399,23 +437,28 @@ class MigrationManager:
         remove_migration_state()
 
     def _source_snapshot(self):
-        source_secret = _read_json(DEVICE_SECRET_CACHE_FILE)
-        return self.config.as_dict(include_device_secret=True), source_secret
+        secret = self.config.device_secret or load_cached_device_secret(
+            self.config, DEVICE_SECRET_CACHE_FILE)
+        if not secret:
+            raise CredentialStoreError("source credential missing; migration refused")
+        save_cached_device_secret(self.config, secret, DEVICE_SECRET_CACHE_FILE)
+        return self.config.as_dict(), _secret_cache_for(self.config, secret)
 
     def _abort_precommit(self, code, reason):
         try:
             if self.state and self.state.get("sourceConfig"):
                 _identity_from_state(self.state, False)
+            self._done("failed", reason)
         except Exception as error:
-            reason = "{}; source restore failed: {}".format(reason, error)
+            self._debug("RESTORE_WRITE", "Source restore deferred; recovery retained", str(error))
+            return False
         self._debug(code, reason)
-        self._done("failed", reason)
         self.state = None
         sleep_ms(200)
         self.reboot()
+        return True
 
     def _rollback(self, code, reason):
-        self._save("rollback", failureCode=code, failureReason=str(reason)[:160])
         self._debug(code, reason)
         self.cloud.stop = True
         try:
@@ -423,13 +466,17 @@ class MigrationManager:
         except Exception:
             pass
         try:
+            if self.state.get("stage") != "rollback":
+                self._save("rollback", failureCode=code, failureReason=self._safe_error(reason)[:160])
             _identity_from_state(self.state, False)
             self._done("rolled_back", reason)
         except Exception as error:
             self._debug("ROLLBACK_WRITE", "old identity restore failed", str(error))
-            return
+            return False
+        self.state = None
         sleep_ms(200)
         self.reboot()
+        return True
 
     def _commit(self):
         self._save("committing")
@@ -481,11 +528,20 @@ class MigrationManager:
         }
         self._save("preflight")
         target_config = DeviceConfig(normalized["target"])
-        self._runtime("register", "Registering target identity over TLS")
-        secret = dynamic_register_secret(target_config)
+        secret = load_cached_device_secret(target_config, DEVICE_SECRET_CACHE_FILE)
         if not secret:
-            raise OSError("target dynamic registration returned no DeviceSecret")
+            check_credential_capacity(target_config, DEVICE_SECRET_CACHE_FILE)
+            self._runtime("register", "Registering target identity over TLS")
+            secret = dynamic_register_secret(target_config)
+        else:
+            self._runtime("reuse", "Using retained target credential")
+        if not valid_device_secret(secret):
+            raise CredentialStoreError("target registration returned no valid DeviceSecret")
         target_secret = _secret_cache_for(target_config, secret)
+        # Keep in RAM even if either persistence step fails. Recovery retries
+        # only writes; it must not register again or activate an unsaved key.
+        self.state["targetSecret"] = target_secret
+        save_cached_device_secret(target_config, secret, DEVICE_SECRET_CACHE_FILE)
         self._save("registered", targetSecret=target_secret)
         probe_id = self.delivery.sequence.next() & 0x7FFFFFFF
         self._runtime("probe", "Probing target MQTT and runtimeLog acknowledgement")
@@ -591,8 +647,11 @@ class MigrationManager:
                     self._confirm_target()
                 except Exception as error:
                     self._rollback("CONFIRM_WORKER", str(error))
+                while not self.stop and self.state:
+                    sleep_ms(2000)
+                    self._rollback("RECOVERY_RETRY", "retrying old identity restore")
                 return
-            self._abort_precommit(
+            self._retry_abort(
                 "POWER_RECOVERY",
                 "pre-commit migration interrupted; old identity restored",
             )
@@ -603,4 +662,10 @@ class MigrationManager:
         try:
             self._start_new(command)
         except Exception as error:
-            self._abort_precommit("PREFLIGHT", str(error))
+            self._retry_abort("PREFLIGHT", str(error))
+
+    def _retry_abort(self, code, reason):
+        while not self.stop:
+            if self._abort_precommit(code, reason):
+                return
+            sleep_ms(2000)

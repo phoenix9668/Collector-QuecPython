@@ -1,0 +1,1 @@
+{"files":{"collector_cloud.py.bin":"/usr/collector_cloud.py","collector_config.py.bin":"/usr/collector_config.py","collector_migration.py.bin":"/usr/collector_migration.py"}}

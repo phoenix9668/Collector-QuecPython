@@ -85,6 +85,8 @@ __pycache__/
 
 # Per-device Aliyun credentials (copy device.example.json locally)
 /src/device.json
+/src/device_secret.json*
+/src/.migration_state.*
 /src/data/
 /private_dist/
 /device_migration.json

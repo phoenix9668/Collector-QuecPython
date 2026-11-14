@@ -14,9 +14,15 @@ try:
 except ImportError:  # host-side tests
     import os
 
+try:
+    import _thread
+except ImportError:
+    _thread = None
+
+_credential_lock = _thread.allocate_lock() if _thread else None
 
 PROJECT_NAME = "QuecPython_EC600M"
-PROJECT_VERSION = "4.1.4"
+PROJECT_VERSION = "4.1.5"
 OTA_MODULE_NAME = "collector_app"
 OTA_MULTI_FILE_TARGETS = (
     "/usr/collector_app.py",
@@ -33,6 +39,9 @@ OTA_MULTI_FILE_TARGETS = (
 
 DEVICE_CONFIG_FILE = "/usr/device.json"
 DEVICE_SECRET_CACHE_FILE = "/usr/device_secret.json"
+CREDENTIAL_FILE_BYTES = 4096
+CREDENTIAL_STORAGE_BYTES = 3 * CREDENTIAL_FILE_BYTES
+DEVICE_SECRET_MAX_LENGTH = 128
 DEVICE_MIGRATION_FILE = "/usr/device_migration.json"
 MIGRATION_STATE_0 = "/usr/.migration_state.0"
 MIGRATION_STATE_1 = "/usr/.migration_state.1"
@@ -91,15 +100,16 @@ LOCAL_LOG_DIR = "/usr/log"
 LOCAL_LOG_MAX_BYTES = 8 * 1024
 LOCAL_LOG_TOTAL_BYTES = 16 * 1024
 # Beyond the two bounded log files, leave filesystem blocks for the /usr/data
-# directory, dual queue metadata, sequence metadata, and a dynamically
-# registered DeviceSecret cache. QuecPython charges small files in 4 KiB units
+# directory, dual queue metadata, sequence metadata, and credential snapshots.
+# QuecPython charges small files in 4 KiB units
 # and directories in 8 KiB units.
 # Identity migration can temporarily hold two CRC-protected state copies, the
 # downloaded command, and the completed marker. Reserve their 4 KiB blocks
 # before sizing the SignsData spool on the small EC600M filesystem.
 MIGRATION_STORAGE_ALLOWANCE_BYTES = 20 * 1024
 RUNTIME_STORAGE_ALLOWANCE_BYTES = (
-    LOCAL_LOG_TOTAL_BYTES + 20 * 1024 + MIGRATION_STORAGE_ALLOWANCE_BYTES
+    LOCAL_LOG_TOTAL_BYTES + 16 * 1024 + CREDENTIAL_STORAGE_BYTES
+    + MIGRATION_STORAGE_ALLOWANCE_BYTES
 )
 
 MIGRATION_CONFIRM_SECONDS = 120
@@ -178,6 +188,10 @@ class DeviceConfig:
         self.mqtt_port = int(values.get("mqttPort", MQTT_PORT))
         self.device_secret = _text(values, "deviceSecret")
         self.product_secret = _text(values, "productSecret")
+        for key in ("deviceSecret", "productSecret"):
+            value = values.get(key)
+            if value not in (None, "") and not valid_device_secret(value):
+                raise ValueError("invalid " + key)
         if not self.device_secret and not self.product_secret:
             raise ValueError("deviceSecret or productSecret is required")
         allowed = values.get("otaAllowedHosts", [])
@@ -221,7 +235,6 @@ class DeviceConfig:
 
 
 def load_device_config(path=DEVICE_CONFIG_FILE):
-    data = None
     candidates = (path, path + ".tmp")
     if path == DEVICE_CONFIG_FILE:
         candidates += (
@@ -233,71 +246,257 @@ def load_device_config(path=DEVICE_CONFIG_FILE):
         try:
             with open(candidate, "r") as stream:
                 data = json.loads(stream.read())
-            break
+            if not isinstance(data, dict):
+                raise ValueError("device config root must be an object")
+            return DeviceConfig(data)
         except Exception as error:
             last_error = error
-    if data is None:
-        if last_error:
-            raise last_error
-        raise OSError("device config unavailable")
-    if not isinstance(data, dict):
-        raise ValueError("device config root must be an object")
-    return DeviceConfig(data)
+    if last_error:
+        raise last_error
+    raise OSError("device config unavailable")
 
 
-def load_cached_device_secret(config, path=DEVICE_SECRET_CACHE_FILE):
-    candidates = [path, path + ".tmp"]
-    if path == DEVICE_SECRET_CACHE_FILE:
-        candidates.extend(
-            [
-                LEGACY_DEVICE_SECRET_CACHE_FILE,
-                LEGACY_DEVICE_SECRET_CACHE_FILE + ".tmp",
-            ]
-        )
-    for candidate in candidates:
-        try:
-            with open(candidate, "r") as stream:
-                data = json.loads(stream.read())
-        except Exception:
-            continue
-        if data.get("productKey") != config.product_key:
-            continue
-        if data.get("deviceName") != config.device_name:
-            continue
-        secret = _text(data, "deviceSecret")
-        if secret:
-            return secret
-    return ""
+class CredentialStoreError(OSError):
+    pass
 
 
-def save_cached_device_secret(config, secret, path=DEVICE_SECRET_CACHE_FILE):
-    atomic_json_write(
-        path,
-        {
-            "productKey": config.product_key,
-            "deviceName": config.device_name,
-            "deviceSecret": secret,
-        },
+class CredentialStoreFull(CredentialStoreError):
+    pass
+
+
+class CredentialReadError(CredentialStoreError):
+    pass
+
+
+def valid_device_secret(secret):
+    return (
+        isinstance(secret, str) and 0 < len(secret) <= DEVICE_SECRET_MAX_LENGTH
+        and all(33 <= ord(c) <= 126 for c in secret)
     )
 
 
-def clear_cached_device_secret(path=DEVICE_SECRET_CACHE_FILE):
-    removed = False
-    candidates = [path, path + ".tmp"]
+def redact_credential_values(message, values):
+    message = str(message)
+    for value in values:
+        if isinstance(value, str) and value:
+            message = message.replace(value, "[redacted]")
+    return message
+
+
+def _credential_record(config, secret):
+    if not valid_device_secret(secret):
+        raise CredentialStoreError("invalid DeviceSecret")
+    return [config.product_key, config.device_name, secret]
+
+
+def _merge_credentials(records, incoming):
+    for record in incoming:
+        if record in records:
+            records.remove(record)
+        records.append(record)
+
+
+def _decode_credentials(raw):
+    from collector_queue import crc32
+
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError()
+    current = [data.get(k) for k in ("productKey", "deviceName", "deviceSecret")]
+    generation = 0
+    records = [current]
+    if "version" in data:
+        body = data["body"]
+        version, generation, records = json.loads(body)
+        if (version != 1 or data["version"] != 1
+                or not isinstance(generation, int) or generation < 1
+                or generation != data["generation"]
+                or crc32(body.encode("utf-8")) != data["crc32"]
+                or not records or records[-1] != current):
+            raise ValueError()
+    if not isinstance(records, list):
+        raise ValueError()
+    for record in records:
+        if not isinstance(record, list) or len(record) != 3:
+            raise ValueError()
+        for name in record[:2]:
+            if not isinstance(name, str) or not name or name != name.strip():
+                raise ValueError()
+            _validate_identity("credential identity", name)
+        if not valid_device_secret(record[2]):
+            raise ValueError()
+    return generation, records
+
+
+def _read_credential_file(path):
+    try:
+        with open(path, "r") as stream:
+            raw = stream.read(CREDENTIAL_FILE_BYTES + 1)
+    except OSError as error:
+        if error.args and error.args[0] == 2:
+            return None
+        raise CredentialReadError("credential read failed")
+    except Exception:
+        raise CredentialReadError("credential read failed")
+    try:
+        if len(raw.encode("utf-8")) > CREDENTIAL_FILE_BYTES:
+            raise ValueError()
+        return _decode_credentials(raw)
+    except Exception:
+        raise CredentialStoreError("credential snapshot corrupt")
+
+
+def _read_credentials(path):
+    # Merge legacy first, then complete snapshots by generation. All historical
+    # values survive, including an explicitly replaced secret for one identity.
+    groups = [(path + ".bak", path, path + ".tmp")]
     if path == DEVICE_SECRET_CACHE_FILE:
-        candidates.extend(
-            [
-                LEGACY_DEVICE_SECRET_CACHE_FILE,
-                LEGACY_DEVICE_SECRET_CACHE_FILE + ".tmp",
-            ]
-        )
-    for candidate in candidates:
-        try:
-            os.remove(candidate)
-            removed = True
-        except Exception:
-            pass
-    return removed
+        groups.insert(0, (LEGACY_DEVICE_SECRET_CACHE_FILE,
+                          LEGACY_DEVICE_SECRET_CACHE_FILE + ".tmp"))
+    copies, records, failure, write_failure = {}, [], None, None
+    generation = 0
+    for group in groups:
+        good, error = [], None
+        for candidate in group:
+            try:
+                value = _read_credential_file(candidate)
+                if value is not None:
+                    copies[candidate] = value
+                    index = len(good)
+                    while index and good[index - 1][0] > value[0]:
+                        index -= 1
+                    good.insert(index, value)
+            except CredentialStoreError as caught:
+                error = failure = caught
+                if isinstance(caught, CredentialReadError):
+                    write_failure = caught
+        if error and not good:
+            write_failure = error
+        for number, incoming in good:
+            generation = max(generation, number)
+            _merge_credentials(records, incoming)
+    return records, generation, copies, failure, write_failure
+
+
+def _credential_payload(records, generation):
+    from collector_queue import crc32
+
+    body = json.dumps([1, generation, records])
+    current = records[-1]
+    raw = json.dumps({
+        "productKey": current[0], "deviceName": current[1],
+        "deviceSecret": current[2], "version": 1, "generation": generation,
+        "body": body, "crc32": crc32(body.encode("utf-8")),
+    })
+    if len(raw.encode("utf-8")) > CREDENTIAL_FILE_BYTES:
+        raise CredentialStoreFull("credential archive full; identities retained")
+    return raw
+
+
+def _write_credential_file(path, raw):
+    # Do not swallow flush or short-write failures. Verify before replacing any
+    # other copy; errors never contain credential values or response bodies.
+    try:
+        with open(path, "w") as stream:
+            count = stream.write(raw)
+            if count is not None and count != len(raw):
+                raise OSError()
+            flush = getattr(stream, "flush", None)
+            if flush:
+                flush()
+        with open(path, "r") as stream:
+            if stream.read(CREDENTIAL_FILE_BYTES + 1) != raw:
+                raise OSError()
+        _decode_credentials(raw)
+    except Exception:
+        raise CredentialStoreError("credential write verification failed")
+
+
+def load_cached_device_secret(config, path=None):
+    path = path or DEVICE_SECRET_CACHE_FILE
+    if _credential_lock:
+        _credential_lock.acquire()
+    try:
+        records, _generation, _copies, failure, _write_failure = _read_credentials(path)
+        for record in reversed(records):
+            if record[:2] == [config.product_key, config.device_name]:
+                return record[2]
+        if failure:
+            raise failure
+        return ""
+    finally:
+        if _credential_lock:
+            _credential_lock.release()
+
+
+def _save_credentials(config, secret, path, capacity_only=False):
+    records, generation, copies, failure, write_failure = _read_credentials(path)
+    if write_failure or (capacity_only and failure):
+        raise write_failure or failure
+    old_records = list(records)
+    _merge_credentials(records, [_credential_record(config, secret)])
+    raw = _credential_payload(records, generation + 1)
+    if capacity_only:
+        if hasattr(os, "statvfs"):
+            try:
+                info = os.statvfs(path.replace("\\", "/").rsplit("/", 1)[0])
+            except OSError:
+                raise CredentialStoreError("credential capacity check failed")
+            needed = sum(CREDENTIAL_FILE_BYTES for name in (path, path + ".bak", path + ".tmp")
+                         if name not in copies)
+            if int(info[0]) * int(info[3]) < needed:
+                raise CredentialStoreFull("credential disk space insufficient")
+        return
+    primary, backup = copies.get(path), copies.get(path + ".bak")
+    if (primary and backup and primary[0] > 0 and backup[0] > 0
+            and primary[1] == records and backup[1] == records):
+        return
+    ensure_dir(path.replace("\\", "/").rsplit("/", 1)[0])
+    # Never truncate the only copy of ANY historical record. Usually .tmp is
+    # reusable; after power loss it may be the sole complete snapshot instead.
+    first = None
+    for candidate in (path + ".tmp", path + ".bak", path):
+        others = []
+        for name in copies:
+            if name != candidate:
+                others.extend(copies[name][1])
+        if all(record in others for record in old_records):
+            first = candidate
+            break
+    if first is None:
+        raise CredentialStoreError("credential copies require manual recovery")
+    _write_credential_file(first, raw)
+    for candidate in (path + ".bak", path):
+        if candidate != first:
+            _write_credential_file(candidate, raw)
+    try:
+        os.remove(path + ".tmp")
+    except OSError:
+        pass
+
+
+def save_cached_device_secret(config, secret, path=None):
+    if _credential_lock:
+        _credential_lock.acquire()
+    try:
+        _save_credentials(config, secret, path or DEVICE_SECRET_CACHE_FILE)
+    finally:
+        if _credential_lock:
+            _credential_lock.release()
+
+
+def check_credential_capacity(config, path=None):
+    """Refuse a new registration before the bounded archive is exhausted."""
+    if _credential_lock:
+        _credential_lock.acquire()
+    try:
+        # Backslashes reserve the worst-case JSON escaping, including the
+        # embedded checksummed body, before the server issues a new key.
+        _save_credentials(config, "\\" * DEVICE_SECRET_MAX_LENGTH,
+                          path or DEVICE_SECRET_CACHE_FILE, True)
+    finally:
+        if _credential_lock:
+            _credential_lock.release()
 
 
 def load_uart_sample_log(path=COLLECTOR_SETTINGS_FILE):
